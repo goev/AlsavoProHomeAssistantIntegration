@@ -1,0 +1,21 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]"
+    },
+    "error": {
+      "connection_error": "[%key:common::config_flow::error::connection_error%]"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "name": "[%key:common::config_flow::data::name%]",
+          "serial_no": "Heatpump serial no",
+          "ip_address": "[%key:common::config_flow::data::ip%]",
+          "port": "[%key:common::config_flow::data::port%]",
+          "password": "[%key:common::config_flow::data::password%]"
+        }
+      }
+    }
+  }
+}

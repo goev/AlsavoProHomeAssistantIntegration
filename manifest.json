@@ -1,0 +1,9 @@
+{
+  "domain": "alsavopro",
+  "name": "AlsavoPro",
+  "documentation": "",
+  "requirements": [],
+  "codeowners": [],
+  "config_flow": true,
+  "version": "0.0.1"
+}
