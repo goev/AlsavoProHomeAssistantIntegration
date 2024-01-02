@@ -16,6 +16,7 @@ from .const import (
     SERIAL_NO,
 )
 
+
 async def async_setup(hass, config):
     return True
 
@@ -40,6 +41,7 @@ async def async_setup_entry(hass, entry):
         )
 
     return True
+
 
 async def async_unload_entry(hass, config_entry):
     """Unload a config entry."""

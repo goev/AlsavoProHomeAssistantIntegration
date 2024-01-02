@@ -1,6 +1,4 @@
 """Adds config flow for AlsavoPro pool heater integration."""
-import logging
-
 import voluptuous as vol
 from homeassistant import config_entries, core, exceptions
 from homeassistant.core import callback
@@ -31,14 +29,24 @@ DATA_SCHEMA = vol.Schema(
 
 async def validate_input(hass: core.HomeAssistant, name, serial_no, ip_address, port_no, password):
     """Validate the user input allows us to connect."""
+
+    # Pre-validation for missing mandatory fields
+    if not name:
+        raise MissingNameValue("The 'name' field is required.")
+    if not password:
+        raise MissingPasswordValue("The 'password' field is required.")
+
     for entry in hass.config_entries.async_entries(DOMAIN):
-        if (entry.data[SERIAL_NO] == serial_no
-                or entry.data[CONF_NAME] == name
-                or entry.data[CONF_IP_ADDRESS] == ip_address
-                or entry.data[CONF_PORT] == port_no):
-            raise AlreadyConfigured
-        if name is None or name == "":
-            raise MissingNameValue
+        if any([
+            entry.data[SERIAL_NO] == serial_no,
+            entry.data[CONF_NAME] == name,
+            entry.data[CONF_IP_ADDRESS] == ip_address,
+            entry.data[CONF_PORT] == port_no
+        ]):
+            raise AlreadyConfigured("An entry with the given details already exists.")
+
+    # Additional validations (if any) go here...
+
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Alsavo Pro pool heater integration."""
@@ -84,6 +92,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+
 class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         return self.async_show_form(
@@ -93,10 +102,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             }),
         )
 
-@staticmethod
+
 @callback
 def async_get_options_flow(config_entry):
     return OptionsFlowHandler(config_entry)
+
 
 class CannotConnect(exceptions.HomeAssistantError):
     """Error to indicate we cannot connect."""
@@ -105,5 +115,10 @@ class CannotConnect(exceptions.HomeAssistantError):
 class AlreadyConfigured(exceptions.HomeAssistantError):
     """Error to indicate host is already configured."""
 
+
 class MissingNameValue(exceptions.HomeAssistantError):
+    """Error to indicate name is missing."""
+
+
+class MissingPasswordValue(exceptions.HomeAssistantError):
     """Error to indicate name is missing."""

@@ -8,24 +8,25 @@ from .const import (
     DOMAIN
 )
 
+
 async def async_setup_entry(hass, entry, async_add_devices):
     dh = hass.data[DOMAIN][entry.entry_id]
     async_add_devices(
         [
             AlsavoProSensor(dh,
-                        SensorDeviceClass.TEMPERATURE,
-                        "Water In",
-                        "°C",
-                        16,
-                        False,
-                        "mdi:thermometer"),
+                            SensorDeviceClass.TEMPERATURE,
+                            "Water In",
+                            "°C",
+                            16,
+                            False,
+                            "mdi:thermometer"),
             AlsavoProSensor(dh,
-                        SensorDeviceClass.TEMPERATURE,
-                        "Water Out",
-                        "°C",
-                        17,
-                        False,
-                        "mdi:thermometer"),
+                            SensorDeviceClass.TEMPERATURE,
+                            "Water Out",
+                            "°C",
+                            17,
+                            False,
+                            "mdi:thermometer"),
             AlsavoProSensor(dh,
                             SensorDeviceClass.TEMPERATURE,
                             "Ambient",
@@ -52,6 +53,13 @@ async def async_setup_entry(hass, entry, async_add_devices):
                             "IPM module",
                             "°C",
                             21,
+                            False,
+                            "mdi:thermometer"),
+            AlsavoProSensor(dh,
+                            SensorDeviceClass.TEMPERATURE,
+                            "Exhaust temperature",
+                            "°C",
+                            23,
                             False,
                             "mdi:thermometer"),
             AlsavoProSensor(dh,
@@ -96,6 +104,13 @@ async def async_setup_entry(hass, entry, async_add_devices):
                             27,
                             False,
                             "mdi:air-conditioner"),
+            AlsavoProSensor(dh,
+                            None,
+                            "Frequency limit code",
+                            "",
+                            34,
+                            False,
+                            "mdi:bell-alert"),
             AlsavoProSensor(dh,
                             None,
                             "Alarm code 1",
@@ -188,9 +203,10 @@ async def async_setup_entry(hass, entry, async_add_devices):
                             True,
                             "mdi:heat-pump"),
             AlsavoProErrorSensor(dh,
-                            "Error messages"),
+                                 "Error messages"),
         ]
     )
+
 
 class AlsavoProSensor(SensorEntity):
     def __init__(self, data_handler: AlsavoPro,
@@ -198,20 +214,20 @@ class AlsavoProSensor(SensorEntity):
                  name: str,
                  unit: str,
                  idx: int,
-                 fromConfig: bool,
+                 from_config: bool,
                  icon: str):
         self._data_handler = data_handler
         self._name = name
         self._attr_device_class = device_class
         self._attr_native_unit_of_measurement = unit
         self._dataIdx = idx
-        self._config = fromConfig
+        self._config = from_config
         self._icon = icon
 
     @property
     def name(self):
         """Return the name of the sensor."""
-        return f"{DOMAIN}_{self._data_handler._name}_{self._name}"
+        return f"{DOMAIN}_{self._data_handler.name}_{self._name}"
 
     # This property is important to let HA know if this entity is online or not.
     # If an entity is offline (return False), the UI will reflect this.
@@ -223,21 +239,21 @@ class AlsavoProSensor(SensorEntity):
     @property
     def unique_id(self):
         """Return a unique ID."""
-        return f"{self._data_handler.uniqueId()}_{self._name}"
+        return f"{self._data_handler.unique_id}_{self._name}"
 
     @property
     def native_value(self):
         # Hent data fra data_handler her
         if self._attr_device_class == SensorDeviceClass.TEMPERATURE:
             if self._config:
-                return self._data_handler.getTemperatureFromConfig(self._dataIdx)
+                return self._data_handler.get_temperature_from_config(self._dataIdx)
             else:
-                return self._data_handler.getTemperatureFromStatus(self._dataIdx)
+                return self._data_handler.get_temperature_from_status(self._dataIdx)
         else:
             if self._config:
-                return self._data_handler.getConfigValue(self._dataIdx)
+                return self._data_handler.get_config_value(self._dataIdx)
             else:
-                return self._data_handler.getStatusValue(self._dataIdx)
+                return self._data_handler.get_status_value(self._dataIdx)
 
     @property
     def icon(self):
@@ -246,6 +262,7 @@ class AlsavoProSensor(SensorEntity):
     async def async_update(self):
         """Get the latest data."""
         await self._data_handler.update()
+
 
 class AlsavoProErrorSensor(SensorEntity):
     def __init__(self, data_handler: AlsavoPro,
@@ -257,16 +274,16 @@ class AlsavoProErrorSensor(SensorEntity):
     @property
     def name(self):
         """Return the name of the sensor."""
-        return f"{DOMAIN}_{self._data_handler._name}_{self._name}"
+        return f"{DOMAIN}_{self._data_handler.name}_{self._name}"
 
     @property
     def unique_id(self):
         """Return a unique ID."""
-        return f"{self._data_handler.uniqueId()}_{self._name}"
+        return f"{self._data_handler.unique_id}_{self._name}"
 
     @property
     def native_value(self):
-        return self._data_handler.getErrors()
+        return self._data_handler.errors
 
     @property
     def icon(self):

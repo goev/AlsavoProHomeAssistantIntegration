@@ -7,8 +7,13 @@ from enum import Enum
 
 _LOGGER = logging.getLogger(__name__)
 
+
 class AlsavoPro:
     """Alsavo Pro data handler."""
+    # Static mapping of operating modes to config keys
+    MODE_TO_CONFIG = {0: 2,  # Cool
+                      1: 1,  # Heat
+                      2: 3}  # Auto
 
     def __init__(self, name, serial_no, ip_address, port_no, password):
         """Init Alsavo Pro data handler."""
@@ -26,12 +31,12 @@ class AlsavoPro:
             if self._session.connectionStatus == ConnectionStatus.Disconnected:
                 raise Exception("Unable to connect to heater.")
 
-            self._data = self._session.queryAll()
-            self._session.Disconnect()
+            self._data = self._session.query_all()
+            self._session.disconnect()
         except Exception as e:
             _LOGGER.error(f"Something went wrong: {e}")
             if self._session is not None:
-                self._session.Disconnect()
+                self._session.disconnect()
             self._data = QueryResponse(0, 0)
 
     async def update(self):
@@ -43,12 +48,12 @@ class AlsavoPro:
             self._session = AlsavoSocketCom()
             self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
             if self._session.connectionStatus == ConnectionStatus.Connected:
-                self._data = self._session.queryAll()
+                self._data = self._session.query_all()
                 self._prev_request = datetime.now()
         except Exception as e:
             _LOGGER.error(f"Unable to connect to heatpump {e}")
             if self._session is not None:
-                self._session.Disconnect()
+                self._session.disconnect()
             self._data = QueryResponse(0, 0)
 
         # timeout = 10
@@ -63,131 +68,147 @@ class AlsavoPro:
         # except Exception as err:
         #     _LOGGER.error("Error refreshing Alsavo Pro: %s ", err, exc_info=True)
 
-    def isOnline(self)->bool:
+    @property
+    def is_online(self) -> bool:
         return self._data.parts > 0
 
-    def uniqueId(self):
+    @property
+    def unique_id(self):
         return f"{self._name}_{self._serial_no}"
 
-    def getTargetTemperature(self):
-        if self.getOperatingMode() == 0: #Cool
-            return self.getTemperatureFromConfig(2)
-        elif self.getOperatingMode() == 1: #Heat
-            return self.getTemperatureFromConfig(1)
-        elif self.getOperatingMode() == 2: #Auto
-            return self.getTemperatureFromConfig(3)
-        return 0
+    @property
+    def target_temperature(self):
+        return self.get_temperature_from_config(self.MODE_TO_CONFIG.get(self.operating_mode, 0))
 
-    def setTargetTemperature(self, value: float):
-        if self.getOperatingMode() == 0: #Cool
-            self.setConfig(2, int(value * 10))
-        elif self.getOperatingMode() == 1: #Heat
-            self.setConfig(1, int(value * 10))
-        elif self.getOperatingMode() == 2: #Auto
-            self.setConfig(3, int(value * 10))
+    def set_target_temperature(self, value: float):
+        config_key = self.MODE_TO_CONFIG.get(self.operating_mode)
+        if config_key is not None:
+            self.set_config(config_key, int(value * 10))
 
-    def getStatusValue(self,idx: int):
-        return self._data.getStatusValue(idx)
+    def get_status_value(self, idx: int):
+        return self._data.get_status_value(idx)
 
-    def getConfigValue(self,idx: int):
-        return self._data.getConfigValue(idx)
+    def get_config_value(self, idx: int):
+        return self._data.get_config_value(idx)
 
-    def getTemperatureFromStatus(self, idx):
-        return self._data.getStatusTemperatureValue(idx)
-    def getTemperatureFromConfig(self, idx):
-        return self._data.getConfigTemperatureValue(idx)
-    def getWaterInTemperature(self):
-        return self.getTemperatureFromStatus(16)
+    def get_temperature_from_status(self, idx):
+        return self._data.get_status_temperature_value(idx)
 
-    def getWaterOutTemperature(self):
-        return self.getTemperatureFromStatus(17)
+    def get_temperature_from_config(self, idx):
+        return self._data.get_config_temperature_value(idx)
 
-    def getAmbientTemperature(self):
-        return self.getTemperatureFromStatus(18)
+    @property
+    def water_in_temperature(self):
+        return self.get_temperature_from_status(16)
 
-    def getOperatingMode(self):
-        return self._data.getConfigValue(4) & 3
+    @property
+    def water_out_temperature(self):
+        return self.get_temperature_from_status(17)
 
-    def getTimerOnEnabled(self):
-        return self._data.getConfigValue(4) & 4 == 4
+    @property
+    def ambient_temperature(self):
+        return self.get_temperature_from_status(18)
 
-    def getWaterPumpRunningMode(self):
-        return self._data.getConfigValue(4) & 8 == 8
+    @property
+    def operating_mode(self):
+        return self._data.get_config_value(4) & 3
 
-    def getElectronicValveStyle(self):
-        return self._data.getConfigValue(4) & 16 == 16
+    @property
+    def is_timer_on_enabled(self):
+        return self._data.get_config_value(4) & 4 == 4
 
-    def isPowerOn(self):
-        return self._data.getConfigValue(4) & 32 == 32
+    @property
+    def water_pump_running_mode(self):
+        return self._data.get_config_value(4) & 8 == 8
 
-    def setPowerOff(self):
-        self.setConfig(4, self._data.getConfigValue(4) & 0xFFDF)
+    @property
+    def electronic_valve_style(self):
+        return self._data.get_config_value(4) & 16 == 16
 
-    def setCoolingMode(self):
-        self.setConfig(4, (self._data.getConfigValue(4) & 0xFFDC) + 32)
+    @property
+    def is_power_on(self):
+        return self._data.get_config_value(4) & 32 == 32
 
-    def setHeatingMode(self):
-        self.setConfig(4, (self._data.getConfigValue(4) & 0xFFDC) + 33)
+    @property
+    def power_mode(self):
+        return self._data.get_config_value(16)
 
-    def setAutoMode(self):
-        self.setConfig(4, (self._data.getConfigValue(4) & 0xFFDC) + 34)
+    @property
+    def is_debug_mode(self):
+        return self._data.get_config_value(4) & 64 == 64
 
-    def getPowerMode(self):
-        return self._data.getConfigValue(16)
+    @property
+    def is_timer_off_enabled(self):
+        return self._data.get_config_value(4) & 128 == 128
 
-    def setPowerMode(self,value: int):
-        self.setConfig(16, value)
+    @property
+    def manual_defrost(self):
+        return self._data.get_config_value(5) & 1 == 1
 
-    def getDebugMode(self):
-        return self._data.getConfigValue(4) & 64 == 64
+    @property
+    def errors(self):
+        error = ""
+        if self.get_status_value(48) & 0x4 == 0x4:
+            error += "No water flux or water flow switch failure.\n\r"
+        if self.get_status_value(49) & 0x400 == 0x400:
+            error += "Water temperature (T2) too low protection under cooling mode.\n\r"
+        return error
 
-    def getTimerOffEnabled(self):
-        return self._data.getConfigValue(4) & 128 == 128
+    def set_power_off(self):
+        self.set_config(4, self._data.get_config_value(4) & 0xFFDF)
 
-    def getManualDefrost(self):
-        return self._data.getConfigValue(5) & 1 == 1
+    def set_cooling_mode(self):
+        self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 32)
 
-    def setConfig(self, idx: int, value: int):
+    def set_heating_mode(self):
+        self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 33)
+
+    def set_auto_mode(self):
+        self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 34)
+
+    def set_power_mode(self, value: int):
+        self.set_config(16, value)
+
+    def set_config(self, idx: int, value: int):
         try:
             self._session = AlsavoSocketCom()
             self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
             if self._session.connectionStatus == ConnectionStatus.Disconnected:
                 raise Exception("Unable to connect to heater.")
-            self._session.setConfig(idx, value)
+            self._session.set_config(idx, value)
         except Exception as e:
             _LOGGER.error(f"Something went wrong: {e}")
 
         if self._session is not None:
-            self._session.Disconnect()
+            self._session.disconnect()
 
-    def getErrors(self):
-        error = ""
-        if(self.getStatusValue(48) & 0x4 == 0x4):
-            error += "No water flux or water flow switch failure.\n\r"
-        if(self.getStatusValue(49) & 0x400 == 0x400):
-            error += "Water temperature (T2) too low protection under cooling mode.\n\r"
-        return error
+    @property
+    def name(self):
+        return self._name
 
-""" Header for all packets """
+
 class PacketHeader:
-    ''' This is the packet header
-    It is 16 bytes long and have the following attributes:
-    - hdr - byte - 0x32 = request, 0x30 = response
-    - pad - byte - Padding. Always 0
-    - seq - Int16 - Sequence number (monotonically increasing once session has been set up, otherwise 0)
-    - csid - Int32 -
-    '''
+    """ This is the packet header """
+    """ It consists of 16 bytes and have the following attributes: """
+    """ - hdr - byte - 0x32 = request, 0x30 = response """
+    """ - pad - byte - Padding. Always 0 """
+    """ - seq - Int16 - Sequence number (monotonically increasing once session has been set up, otherwise 0) """
+    """ - csid - Int32 - ??? """
+    """ - dsid - Int32 - ??? """
+    """ - cmd - Int16 - Command """
+    """ - Payload length - Int16 - """
 
-    def __init__(self, hdr, seq, csid, dsid, cmd, payloadLength):
+    def __init__(self, hdr, seq, csid, dsid, cmd, payload_length):
         self.hdr = hdr
         self.pad = 0
         self.seq = seq
         self.csid = csid
         self.dsid = dsid
         self.cmd = cmd
-        self.payloadLength = payloadLength
+        self.payloadLength = payload_length
 
-    def isReply(self):
+    @property
+    def is_reply(self):
         return (self.hdr & 2) == 0
 
     def pack(self):
@@ -200,11 +221,9 @@ class PacketHeader:
         return PacketHeader(unpacked_data[0], unpacked_data[2], unpacked_data[3], unpacked_data[4], unpacked_data[5],
                             unpacked_data[6])
 
+
 class Timestamp:
     def __init__(self):
-        self.now()
-
-    def now(self):
         current_time = datetime.now(timezone.utc)
         self.year = current_time.year
         self.month = current_time.month
@@ -218,13 +237,13 @@ class Timestamp:
         # Struct format: uint16, char, char, char, char, char, char
         return struct.pack('!HBBBBBB', self.year, self.month, self.day, self.hour, self.min, self.sec, self.tz)
 
+
 class AuthIntro:
-    def __init__(self, clientToken, serialInv):
+    def __init__(self, client_token, serial_inv):
         self.hdr = PacketHeader(0x32, 0, 0, 0, 0xf2, 0x28)
         self.act1, self.act2, self.act3, self.act4 = 1, 1, 2, 0
-        self.clientToken = clientToken
-        self.pumpSerial = serialInv
-        # self._uuid = [0xffffffff, 0xd3e2eeac, 0, 0x6afdc755]
+        self.clientToken = client_token
+        self.pumpSerial = serial_inv
         self._uuid = [0x97e8ced0, 0xf83640bc, 0xb4dd57e3, 0x22adc3a0]
         self.timestamp = Timestamp()
 
@@ -235,14 +254,15 @@ class AuthIntro:
                                   self.pumpSerial) + packed_uuid + self.timestamp.pack()
         return packed_hdr + packed_data
 
+
 class AuthChallenge:
-    def __init__(self, hdr, act1, act2, act3, act4, serverToken):
+    def __init__(self, hdr, act1, act2, act3, act4, server_token):
         self.hdr = hdr
         self.act1 = act1
         self.act2 = act2
         self.act3 = act3
         self.act4 = act4
-        self.serverToken = serverToken
+        self.serverToken = server_token
 
     @staticmethod
     def unpack(data):
@@ -262,8 +282,9 @@ class AuthChallenge:
         return obj
 
     @property
-    def isAuthorized(self):
+    def is_authorized(self):
         return self.act1 == 3 and self.act2 == 0 and self.act3 == 0 and self.act4 == 0
+
 
 class AuthResponse:
     def __init__(self, csid, dsid, resp):
@@ -279,17 +300,18 @@ class AuthResponse:
         packed_data = struct.pack('!BBBB', self.act1, self.act2, self.act3, self.act4)
         return self.hdr.pack() + packed_data + self.response + self.timestamp.pack()
 
-""" Config, Status or device info-payload packet """
+
 class Payload:
-    def __init__(self, type, subType, size, startIdx, indices):
-        self.type = type
-        self.subType = subType
+    """ Config, Status or device info-payload packet """
+    def __init__(self, data_type, sub_type, size, start_idx, indices):
+        self.type = data_type
+        self.subType = sub_type
         self.size = size
-        self.startIdx = startIdx
+        self.startIdx = start_idx
         self.indices = indices
         self.data = []
 
-    def getValue(self, idx):
+    def get_value(self, idx):
         if idx - self.startIdx < 0 or idx - self.startIdx > self.data.__len__():
             return 0
         return self.data[idx - self.startIdx]
@@ -306,9 +328,11 @@ class Payload:
             obj.data = struct.unpack('>' + 'H' * (obj.size // 2), data[8:8 + obj.size])
         return obj
 
-""" Query response containing data payload from heatpump. """
-""" Contains both status and config. """
+
 class QueryResponse:
+    """ Query response containing data payload from heatpump. """
+    """ Contains both status and config. """
+
     def __init__(self, action, parts):
         self.action = action
         self.parts = parts
@@ -317,23 +341,37 @@ class QueryResponse:
         self.__config = None
         self.__deviceInfo = None
 
-    def getStatusValue(self, idx: int):
+    def get_status_value(self, idx: int):
         if self.__status is None:
             return 0
         else:
-            return self.__status.getValue(idx)
+            return self.__status.get_value(idx)
 
-    def getConfigValue(self, idx: int):
+    def get_config_value(self, idx: int):
         if self.__config is None:
             return 0
         else:
-            return self.__config.getValue(idx)
+            return self.__config.get_value(idx)
 
-    def getStatusTemperatureValue(self, idx: int):
-        return self.getStatusValue(idx) / 10
+    def get_signed_status_value(self, idx: int):
+        unsigned_int = self.get_status_value(idx)
+        if unsigned_int > 32767:
+            return unsigned_int - 65536
+        else:
+            return unsigned_int
 
-    def getConfigTemperatureValue(self, idx: int):
-        return self.getConfigValue(idx) / 10
+    def get_signed_config_value(self, idx: int):
+        unsigned_int = self.get_config_value(idx)
+        if unsigned_int > 32767:
+            return unsigned_int - 65536
+        else:
+            return unsigned_int
+
+    def get_status_temperature_value(self, idx: int):
+        return self.get_signed_status_value(idx) / 10
+
+    def get_config_temperature_value(self, idx: int):
+        return self.get_signed_config_value(idx) / 10
 
     @staticmethod
     def unpack(data):
@@ -354,119 +392,131 @@ class QueryResponse:
 
         return obj
 
-""" Simple hashing of password """
-def Hash(text):
+
+def md5_hash(text):
+    """ Simple hashing of password """
     md5 = hashlib.md5()
     md5.update(text.encode())
     return md5.digest()
+
 
 class ConnectionStatus(Enum):
     Disconnected = 0
     Connected = 1
 
-""" Socket communcation handler for the Alsavo Pro integration """
-""" Everything is pull-based. """
+
 class AlsavoSocketCom:
+    """ Socket communication handler for the Alsavo Pro integration """
+    """ Everything is pull-based. """
+
     def __init__(self):
+        self.serverToken = None
+        self.DSIS = None
+        self.CSID = None
+        self.password = None
+        self.serialQ = None
+        self.clientToken = None
+        self.lstConfigReqTime = None
+        self.socket = None
+        self.serverAddressPort = None
         self.connectionStatus = ConnectionStatus.Disconnected
         self.lastPacketRcvTime = datetime.now()
 
-    def UpdateConnectionStatus(self, status):
+    def update_connection_status(self, status):
         if isinstance(status, ConnectionStatus):
             self.connectionStatus = status
         else:
             raise ValueError("Illegal connection status")
 
-    def send(self, bytesToSend):
-        self.m_Sock.sendto(bytesToSend, self.serverAddressPort)
-        return self.m_Sock.recvfrom(1024)
+    def send(self, bytes_to_send):
+        self.socket.sendto(bytes_to_send, self.serverAddressPort)
+        return self.socket.recvfrom(1024)
 
     def rvc(self):
-        return self.m_Sock.recvfrom(1024)
+        return self.socket.recvfrom(1024)
 
-    def createSocket(self, serverIP, serverPort):
-        self.serverAddressPort = (serverIP, serverPort)
-        self.m_Sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        self.m_Sock.settimeout(3)
+    def create_socket(self, server_ip, server_port):
+        self.serverAddressPort = (server_ip, server_port)
+        self.socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        self.socket.settimeout(3)
 
-    def getAuthChallenge(self, auth_intro: AuthIntro):
+    def get_auth_challenge(self, auth_intro: AuthIntro):
         response = self.send(bytes(auth_intro.pack()))
         return AuthChallenge.unpack(response[0])
 
-    def sendAuthResponse(self, resp: AuthResponse):
+    def send_auth_response(self, resp: AuthResponse):
         return self.send(resp.pack())
 
-    def SendPacket(self, payload: bytes, cmd=0xf4):
-        return self.send(PacketHeader(0x32, 0, self.m_CSID, self.m_DSIS, cmd, payload.__len__()).pack() + payload)
+    def send_packet(self, payload: bytes, cmd=0xf4):
+        return self.send(PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, payload.__len__()).pack() + payload)
 
-    def queryAll(self):
-        resp = self.SendPacket(b'\x08\x01\x00\x00\x00\x02\x00\x2e\xff\xff\x00\x00')
+    def query_all(self):
+        resp = self.send_packet(b'\x08\x01\x00\x00\x00\x02\x00\x2e\xff\xff\x00\x00')
         self.lstConfigReqTime = datetime.now()
         return QueryResponse.unpack(resp[0][16:])
 
-    def setConfig(self,idx: int, value: int):
-        idxH = ((idx >> 8) & 0xff).to_bytes(1,'big')
-        idxL = (idx & 0xff).to_bytes(1,'big')
-        valH = ((value >> 8) & 0xff).to_bytes(1,'big')
-        valL = (value & 0xff).to_bytes(1,'big')
-        self.SendPacket(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04'+idxH+idxL+valH+valL)
+    def set_config(self, idx: int, value: int):
+        idx_h = ((idx >> 8) & 0xff).to_bytes(1, 'big')
+        idx_l = (idx & 0xff).to_bytes(1, 'big')
+        val_h = ((value >> 8) & 0xff).to_bytes(1, 'big')
+        val_l = (value & 0xff).to_bytes(1, 'big')
+        self.send_packet(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04' + idx_h + idx_l + val_h + val_l)
 
-    def connect(self, serverIP, serverPort, serial, password):
+    def connect(self, server_ip, server_port, serial, password):
         _LOGGER.debug("Connection to Alsavo Pro")
 
-        self.m_ClientToken = 3112
-        self.m_SerialQ = serial
-        self.m_Password = password
+        self.clientToken = 3112
+        self.serialQ = serial
+        self.password = password
 
-        auth_intro = AuthIntro(self.m_ClientToken, self.m_SerialQ)
+        auth_intro = AuthIntro(self.clientToken, self.serialQ)
 
-        self.createSocket(serverIP, serverPort)
+        self.create_socket(server_ip, server_port)
 
         # Create a UDP socket at client side
         _LOGGER.debug("Asking for auth challenge")
-        auth_challenge = self.getAuthChallenge(auth_intro)
+        auth_challenge = self.get_auth_challenge(auth_intro)
 
-        if not auth_challenge.isAuthorized:
+        if not auth_challenge.is_authorized:
             _LOGGER.error("Invalid auth challenge packet (pump offline?), disconnecting", exc_info=True)
-            self.Disconnect()
+            self.disconnect()
             return
 
-        self.m_CSID = auth_challenge.hdr.csid
-        self.m_DSIS = auth_challenge.hdr.dsid
-        self.m_ServerToken = auth_challenge.serverToken
+        self.CSID = auth_challenge.hdr.csid
+        self.DSIS = auth_challenge.hdr.dsid
+        self.serverToken = auth_challenge.serverToken
 
-        _LOGGER.debug(f"Received handshake, CSID={hex(self.m_CSID)}, DSID={hex(self.m_DSIS)}, server token {hex(self.m_ServerToken)}")
+        _LOGGER.debug(f"Received handshake, CSID={hex(self.CSID)}, DSID={hex(self.DSIS)}, "
+                      f"server token {hex(self.serverToken)}")
 
         ctx = hashlib.md5()
-        ctx.update(self.m_ClientToken.to_bytes(4, "big"))
-        ctx.update(self.m_ServerToken.to_bytes(4, "big"))
-        ctx.update(Hash(self.m_Password))
+        ctx.update(self.clientToken.to_bytes(4, "big"))
+        ctx.update(self.serverToken.to_bytes(4, "big"))
+        ctx.update(md5_hash(self.password))
 
-        resp = AuthResponse(self.m_CSID, self.m_DSIS, ctx.digest())
-        response = self.sendAuthResponse(resp)
+        resp = AuthResponse(self.CSID, self.DSIS, ctx.digest())
+        response = self.send_auth_response(resp)
 
         if response[0].__len__() == 0:
             _LOGGER.error("Server not responding to auth response, disconnecting.")
-            self.Disconnect()
+            self.disconnect()
             return
 
         act = int.from_bytes(response[0][16:20], byteorder='little')
         if act != 0x00000005:
             _LOGGER.error("Server returned error in auth, disconnecting")
-            self.Disconnect()
+            self.disconnect()
             return
 
-        self.lastPacketRcvTime = datetime.now();
-        self.UpdateConnectionStatus(ConnectionStatus.Connected)
+        self.lastPacketRcvTime = datetime.now()
+        self.update_connection_status(ConnectionStatus.Connected)
 
         _LOGGER.debug("Connection complete.")
 
-    def Disconnect(self):
+    def disconnect(self):
         _LOGGER.debug("Disconnecting")
         try:
-            self.UpdateConnectionStatus(ConnectionStatus.Connected)
-            self.m_NextSeq = 0
-            self.m_Sock.close()
+            self.update_connection_status(ConnectionStatus.Connected)
+            self.socket.close()
         except Exception as e:
             _LOGGER.error(f"Disconnecting failed {e}")
-

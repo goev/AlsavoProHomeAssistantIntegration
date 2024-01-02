@@ -31,15 +31,17 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([AlsavoProClimate(hass.data[DOMAIN][entry.entry_id])])
 
-""" Climate platform for Alsavo Pro pool heater """
+
 class AlsavoProClimate(ClimateEntity):
+    """ Climate platform for Alsavo Pro pool heater """
 
     def __init__(self, data_handler: AlsavoPro):
         """Initialize the heater."""
-        self._name = data_handler._name
+        self._name = data_handler.name
         self._data_handler = data_handler
 
     @property
@@ -50,7 +52,7 @@ class AlsavoProClimate(ClimateEntity):
     @property
     def unique_id(self):
         """Return a unique ID."""
-        return self._data_handler.uniqueId()
+        return self._data_handler.unique_id
 
     @property
     def name(self):
@@ -59,38 +61,39 @@ class AlsavoProClimate(ClimateEntity):
 
     @property
     def hvac_mode(self):
-        """Return hvac operation ie. heat, cool mode."""
-        if self._data_handler.isPowerOn() == False:
+        """Return hvac operation i.e. heat, cool mode."""
+        operating_mode_map = {
+            0: HVACMode.COOL,
+            1: HVACMode.HEAT,
+            2: HVACMode.AUTO
+        }
+
+        if not self._data_handler.is_power_on:
             return HVACMode.OFF
-        elif self._data_handler.getOperatingMode() == 0:
-            return HVACMode.COOL
-        elif self._data_handler.getOperatingMode() == 1:
-            return HVACMode.HEAT
-        elif self._data_handler.getOperatingMode() == 2:
-            return HVACMode.AUTO
-        return None
+
+        return operating_mode_map.get(self._data_handler.operating_mode)
 
     @property
     def fan_mode(self):
-        """Return hvac operation ie. heat, cool mode."""
-        if self._data_handler.getPowerMode() == 0:
-            return FAN_LOW
-        elif self._data_handler.getPowerMode() == 1:
-            return FAN_MEDIUM
-        elif self._data_handler.getPowerMode() == 2:
-            return FAN_HIGH
-        return None
+        """Return hvac operation i.e. heat, cool mode."""
+        power_mode_map = {
+            0: FAN_LOW,
+            1: FAN_MEDIUM,
+            2: FAN_HIGH
+        }
+
+        return power_mode_map.get(self._data_handler.power_mode)
 
     @property
     def icon(self):
         """Return nice icon for heater."""
-        if self.hvac_mode == HVACMode.HEAT:
-            return "mdi:fire"
-        elif self.hvac_mode == HVACMode.COOL:
-            return "mdi:snowflake"
-        elif self.hvac_mode == HVACMode.AUTO:
-            return "mdi:refresh-auto"
-        return "mdi:hvac-off"
+        hvac_mode_icons = {
+            HVACMode.HEAT: "mdi:fire",
+            HVACMode.COOL: "mdi:snowflake",
+            HVACMode.AUTO: "mdi:refresh-auto"
+        }
+
+        return hvac_mode_icons.get(self.hvac_mode, "mdi:hvac-off")
 
     @property
     def hvac_modes(self):
@@ -104,27 +107,28 @@ class AlsavoProClimate(ClimateEntity):
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set hvac mode."""
-        if hvac_mode == HVACMode.OFF:
-            self._data_handler.setPowerOff()
-        elif hvac_mode == HVACMode.COOL:
-            self._data_handler.setCoolingMode()
-        elif hvac_mode == HVACMode.HEAT:
-            self._data_handler.setHeatingMode()
-        elif hvac_mode == HVACMode.AUTO:
-            self._data_handler.setAutoMode()
+        hvac_mode_actions = {
+            HVACMode.OFF: self._data_handler.set_power_off,
+            HVACMode.COOL: self._data_handler.set_cooling_mode,
+            HVACMode.HEAT: self._data_handler.set_heating_mode,
+            HVACMode.AUTO: self._data_handler.set_auto_mode
+        }
 
-        # await self._data_handler.update()
-        return
+        action = hvac_mode_actions.get(hvac_mode)
+        if action:
+            action()
 
     async def async_set_fan_mode(self, fan_mode):
-        """Set hvac mode."""
-        if fan_mode == FAN_LOW:
-            self._data_handler.setPowerMode(0) #Silent
-        elif fan_mode == FAN_MEDIUM:
-            self._data_handler.setPowerMode(1) #Smart
-        elif fan_mode == FAN_HIGH:
-            self._data_handler.setPowerMode(2) #Powerfull
-        return
+        """Set hvac fan mode."""
+        fan_mode_to_power_mode = {
+            FAN_LOW: 0,     # Silent
+            FAN_MEDIUM: 1,  # Smart
+            FAN_HIGH: 2     # Powerful
+        }
+
+        power_mode = fan_mode_to_power_mode.get(fan_mode)
+        if power_mode is not None:
+            self._data_handler.set_power_mode(power_mode)
 
     @property
     def temperature_unit(self):
@@ -134,22 +138,22 @@ class AlsavoProClimate(ClimateEntity):
     @property
     def min_temp(self):
         """Return the minimum temperature."""
-        return self._data_handler.getTemperatureFromStatus(56)
+        return self._data_handler.get_temperature_from_status(56)
 
     @property
     def max_temp(self):
         """Return the maximum temperature."""
-        return self._data_handler.getTemperatureFromStatus(55)
+        return self._data_handler.get_temperature_from_status(55)
 
     @property
     def current_temperature(self):
         """Return the current temperature."""
-        return self._data_handler.getWaterInTemperature()
+        return self._data_handler.water_in_temperature
 
     @property
     def target_temperature(self):
         """Return the temperature we try to reach."""
-        return self._data_handler.getTargetTemperature()
+        return self._data_handler.target_temperature
 
     @property
     def target_temperature_step(self):
@@ -161,7 +165,7 @@ class AlsavoProClimate(ClimateEntity):
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             return
-        self._data_handler.setTargetTemperature(temperature)
+        self._data_handler.set_target_temperature(temperature)
         return
 
     async def async_update(self):
