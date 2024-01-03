@@ -9,6 +9,7 @@ from homeassistant.components.climate import (
 )
 
 from homeassistant.components.climate.const import (
+    SUPPORT_PRESET_MODE,    
     FAN_LOW,
     FAN_MEDIUM,
     FAN_HIGH
@@ -26,7 +27,8 @@ from homeassistant.const import (
 
 from .AlsavoPyCtrl import AlsavoPro
 from .const import (
-    DOMAIN
+    DOMAIN,
+    PRESET_LIST
 )
 
 _LOGGER = logging.getLogger(__name__)
