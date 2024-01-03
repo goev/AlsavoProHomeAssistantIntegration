@@ -7,7 +7,13 @@ Custom component for controlling pool heatpumps that uses the Alsavo Pro app in 
 If some adult with the proper knowledge could improve this, and maybe make it installable with HACS, please feel free to do so! 
 
 ## Install
+#### Manually
 In Home Assistant, create a folder under *custom_components* named *AlsavoPro* and copy all the content of this project to that folder.
+Restart Home Assistant and go to *Devices and Services* and press *+Add integration*.
+Search for *AlsavoPro* and add it.
+#### HACS Custom Repository
+In HACS, add a custom repository and use https://github.com/goev/AlsavoProHomeAssistantIntegration
+Download from HACS.
 Restart Home Assistant and go to *Devices and Services* and press *+Add integration*.
 Search for *AlsavoPro* and add it.
 
