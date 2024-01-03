@@ -9,6 +9,7 @@ from homeassistant.components.climate import (
 )
 
 from homeassistant.components.climate.const import (
+    SUPPORT_PRESET_MODE,    
     FAN_LOW,
     FAN_MEDIUM,
     FAN_HIGH
@@ -47,7 +48,7 @@ class AlsavoProClimate(ClimateEntity):
     @property
     def supported_features(self):
         """Return the list of supported features."""
-        return ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.FAN_MODE
+        return ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
 
     @property
     def unique_id(self):
@@ -74,12 +75,12 @@ class AlsavoProClimate(ClimateEntity):
         return operating_mode_map.get(self._data_handler.operating_mode)
 
     @property
-    def fan_mode(self):
-        """Return hvac operation i.e. heat, cool mode."""
+    def preset_mode(self):
+        """Return Preset modes silent, smart mode."""
         power_mode_map = {
-            0: FAN_LOW,
-            1: FAN_MEDIUM,
-            2: FAN_HIGH
+            0: 'Silent',
+            1: 'Smart',
+            2: 'Powerful'
         }
 
         return power_mode_map.get(self._data_handler.power_mode)
@@ -101,9 +102,9 @@ class AlsavoProClimate(ClimateEntity):
         return [HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO, HVACMode.OFF]
 
     @property
-    def fan_modes(self):
+    def preset_modes(self):
         """Return the list of available hvac operation modes."""
-        return [FAN_LOW, FAN_MEDIUM, FAN_HIGH]
+        return ['Silent', 'Smart', 'Powerful']
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set hvac mode."""
@@ -118,15 +119,15 @@ class AlsavoProClimate(ClimateEntity):
         if action:
             action()
 
-    async def async_set_fan_mode(self, fan_mode):
-        """Set hvac fan mode."""
-        fan_mode_to_power_mode = {
-            FAN_LOW: 0,     # Silent
-            FAN_MEDIUM: 1,  # Smart
-            FAN_HIGH: 2     # Powerful
+    async def async_set_preset_mode(self, preset_mode):
+        """Set hvac preset mode."""
+        preset_mode_to_power_mode = {
+            'Silent': 0,     # Silent
+            'Smart': 1,  # Smart
+            'Powerful': 2     # Powerful
         }
 
-        power_mode = fan_mode_to_power_mode.get(fan_mode)
+        power_mode = preset_mode_to_power_mode.get(preset_mode)
         if power_mode is not None:
             self._data_handler.set_power_mode(power_mode)
 
