@@ -27,8 +27,7 @@ from homeassistant.const import (
 
 from .AlsavoPyCtrl import AlsavoPro
 from .const import (
-    DOMAIN,
-    PRESET_LIST
+    DOMAIN
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,9 +78,9 @@ class AlsavoProClimate(ClimateEntity):
     def preset_mode(self):
         """Return Preset modes silent, smart mode."""
         power_mode_map = {
-            0: Silent,
-            1: Smart,
-            2: Powerful
+            0: 'Silent',
+            1: 'Smart',
+            2: 'Powerful'
         }
 
         return power_mode_map.get(self._data_handler.power_mode)
@@ -105,7 +104,7 @@ class AlsavoProClimate(ClimateEntity):
     @property
     def preset_modes(self):
         """Return the list of available hvac operation modes."""
-        return [Silent, Smart, Powerful]
+        return ['Silent', 'Smart', 'Powerful']
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set hvac mode."""
@@ -123,9 +122,9 @@ class AlsavoProClimate(ClimateEntity):
     async def async_set_preset_mode(self, preset_mode):
         """Set hvac preset mode."""
         preset_mode_to_power_mode = {
-            Silent: 0,     # Silent
-            Smart: 1,  # Smart
-            Powerful: 2     # Powerful
+            'Silent': 0,     # Silent
+            'Smart': 1,  # Smart
+            'Powerful': 2     # Powerful
         }
 
         power_mode = preset_mode_to_power_mode.get(preset_mode)
