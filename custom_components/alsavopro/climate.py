@@ -8,13 +8,6 @@ from homeassistant.components.climate import (
     HVACMode
 )
 
-from homeassistant.components.climate.const import (
-    SUPPORT_PRESET_MODE,    
-    FAN_LOW,
-    FAN_MEDIUM,
-    FAN_HIGH
-)
-
 from homeassistant.const import (
     ATTR_TEMPERATURE,
     CONF_PASSWORD,
@@ -22,7 +15,7 @@ from homeassistant.const import (
     CONF_PORT,
     CONF_NAME,
     PRECISION_TENTHS,
-    TEMP_CELSIUS,
+    UnitOfTemperature,
 )
 
 from .AlsavoPyCtrl import AlsavoPro
@@ -117,7 +110,9 @@ class AlsavoProClimate(ClimateEntity):
 
         action = hvac_mode_actions.get(hvac_mode)
         if action:
-            action()
+            await action()
+
+        await self._data_handler.update(True)
 
     async def async_set_preset_mode(self, preset_mode):
         """Set hvac preset mode."""
@@ -129,12 +124,13 @@ class AlsavoProClimate(ClimateEntity):
 
         power_mode = preset_mode_to_power_mode.get(preset_mode)
         if power_mode is not None:
-            self._data_handler.set_power_mode(power_mode)
+            await self._data_handler.set_power_mode(power_mode)
+        await self._data_handler.update(True)
 
     @property
     def temperature_unit(self):
         """Return the unit of measurement which this device uses."""
-        return TEMP_CELSIUS
+        return UnitOfTemperature.CELSIUS
 
     @property
     def min_temp(self):
@@ -166,9 +162,12 @@ class AlsavoProClimate(ClimateEntity):
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             return
-        self._data_handler.set_target_temperature(temperature)
+        await self._data_handler.set_target_temperature(temperature)
+
+        await self._data_handler.update(True)
+
         return
 
     async def async_update(self):
         """Get the latest data."""
-        await self._data_handler.update()
+        await self._data_handler.update(False)

@@ -261,7 +261,7 @@ class AlsavoProSensor(SensorEntity):
 
     async def async_update(self):
         """Get the latest data."""
-        await self._data_handler.update()
+        await self._data_handler.update(False)
 
 
 class AlsavoProErrorSensor(SensorEntity):

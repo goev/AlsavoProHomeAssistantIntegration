@@ -1,13 +1,10 @@
 """Alsavo Pro pool heat pump integration."""
 
 from homeassistant.const import (
-    ATTR_TEMPERATURE,
     CONF_PASSWORD,
     CONF_IP_ADDRESS,
     CONF_PORT,
     CONF_NAME,
-    PRECISION_TENTHS,
-    TEMP_CELSIUS,
 )
 
 from .AlsavoPyCtrl import AlsavoPro
@@ -30,6 +27,7 @@ async def async_setup_entry(hass, entry):
     password = entry.data.get(CONF_PASSWORD)
 
     data_handler = AlsavoPro(name, serial_no, ip_address, port_no, password)
+    await data_handler.update(True)
 
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}

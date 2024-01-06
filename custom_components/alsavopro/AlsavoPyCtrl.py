@@ -24,49 +24,25 @@ class AlsavoPro:
         self._password = password
         self._data = QueryResponse(0, 0)
         self._prev_request = datetime.now()
+        self._session = AlsavoSocketCom()
 
-        try:
-            self._session = AlsavoSocketCom()
-            self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
-            if self._session.connectionStatus == ConnectionStatus.Disconnected:
-                raise Exception("Unable to connect to heater.")
-
-            self._data = self._session.query_all()
-            self._session.disconnect()
-        except Exception as e:
-            _LOGGER.error(f"Something went wrong: {e}")
-            if self._session is not None:
-                self._session.disconnect()
-            self._data = QueryResponse(0, 0)
-
-    async def update(self):
+    async def update(self, force: bool):
         try:
             # Only update if more than 10 seconds since last update
-            if self._data.parts > 0 and abs(self._prev_request - datetime.now()) < timedelta(seconds=10):
+            if not force and abs(self._prev_request - datetime.now()) < timedelta(seconds=10):
                 return
 
-            self._session = AlsavoSocketCom()
-            self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
+            await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
             if self._session.connectionStatus == ConnectionStatus.Connected:
-                self._data = self._session.query_all()
+                data = await self._session.query_all()
+                if data is not None:
+                    self._data = data
                 self._prev_request = datetime.now()
         except Exception as e:
             _LOGGER.error(f"Unable to connect to heatpump {e}")
             if self._session is not None:
-                self._session.disconnect()
+                await self._session.disconnect()
             self._data = QueryResponse(0, 0)
-
-        # timeout = 10
-        # try:
-        #     async with async_timeout.timeout(timeout):
-        #         session = await get_session(self._serial_no, self._ip_address, self._port_no, self._password)
-        #         if session == None: raise Exception("Could not get session.")
-        #         self._data = session.queryAll()
-        #         session.Disconnect()
-        # except asyncio.TimeoutError:
-        #     _LOGGER.error("Timed out when refreshing to Alsavo Pro pool heater")
-        # except Exception as err:
-        #     _LOGGER.error("Error refreshing Alsavo Pro: %s ", err, exc_info=True)
 
     @property
     def is_online(self) -> bool:
@@ -80,10 +56,10 @@ class AlsavoPro:
     def target_temperature(self):
         return self.get_temperature_from_config(self.MODE_TO_CONFIG.get(self.operating_mode, 0))
 
-    def set_target_temperature(self, value: float):
+    async def set_target_temperature(self, value: float):
         config_key = self.MODE_TO_CONFIG.get(self.operating_mode)
         if config_key is not None:
-            self.set_config(config_key, int(value * 10))
+            await self.set_config(config_key, int(value * 10))
 
     def get_status_value(self, idx: int):
         return self._data.get_status_value(idx)
@@ -154,33 +130,32 @@ class AlsavoPro:
             error += "Water temperature (T2) too low protection under cooling mode.\n\r"
         return error
 
-    def set_power_off(self):
-        self.set_config(4, self._data.get_config_value(4) & 0xFFDF)
+    async def set_power_off(self):
+        await self.set_config(4, self._data.get_config_value(4) & 0xFFDF)
 
-    def set_cooling_mode(self):
-        self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 32)
+    async def set_cooling_mode(self):
+        await self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 32)
 
-    def set_heating_mode(self):
-        self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 33)
+    async def set_heating_mode(self):
+        await self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 33)
 
-    def set_auto_mode(self):
-        self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 34)
+    async def set_auto_mode(self):
+        await self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 34)
 
-    def set_power_mode(self, value: int):
-        self.set_config(16, value)
+    async def set_power_mode(self, value: int):
+        await self.set_config(16, value)
 
-    def set_config(self, idx: int, value: int):
+    async def set_config(self, idx: int, value: int):
         try:
-            self._session = AlsavoSocketCom()
-            self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
+            await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
             if self._session.connectionStatus == ConnectionStatus.Disconnected:
                 raise Exception("Unable to connect to heater.")
-            self._session.set_config(idx, value)
+            await self._session.set_config(idx, value)
         except Exception as e:
             _LOGGER.error(f"Something went wrong: {e}")
 
         if self._session is not None:
-            self._session.disconnect()
+            await self._session.disconnect()
 
     @property
     def name(self):
@@ -428,46 +403,55 @@ class AlsavoSocketCom:
         else:
             raise ValueError("Illegal connection status")
 
-    def send(self, bytes_to_send):
+    async def send(self, bytes_to_send):
+        _LOGGER.debug(f"send())")
         self.socket.sendto(bytes_to_send, self.serverAddressPort)
-        return self.socket.recvfrom(1024)
-
-    def rvc(self):
-        return self.socket.recvfrom(1024)
+        _LOGGER.debug("Waiting for response")
+        response = self.socket.recvfrom(1024)
+        _LOGGER.debug(f"Received response")
+        return response
 
     def create_socket(self, server_ip, server_port):
         self.serverAddressPort = (server_ip, server_port)
         self.socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.socket.settimeout(3)
 
-    def get_auth_challenge(self, auth_intro: AuthIntro):
-        response = self.send(bytes(auth_intro.pack()))
+    async def get_auth_challenge(self, auth_intro: AuthIntro):
+        response = await self.send(bytes(auth_intro.pack()))
         return AuthChallenge.unpack(response[0])
 
-    def send_auth_response(self, resp: AuthResponse):
-        return self.send(resp.pack())
+    async def send_auth_response(self, resp: AuthResponse):
+        return await self.send(resp.pack())
 
-    def send_packet(self, payload: bytes, cmd=0xf4):
-        return self.send(PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, payload.__len__()).pack() + payload)
+    async def send_packet(self, payload: bytes, cmd=0xf4):
+        _LOGGER.debug(f"send_packet(payload, {cmd})")
+        if self.CSID is not None and self.DSIS is not None:
+            return await self.send(PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, payload.__len__()).pack() + payload)
+        return None
 
-    def query_all(self):
-        resp = self.send_packet(b'\x08\x01\x00\x00\x00\x02\x00\x2e\xff\xff\x00\x00')
+    async def query_all(self):
+        _LOGGER.debug("query_all")
+        resp = await self.send_packet(b'\x08\x01\x00\x00\x00\x02\x00\x2e\xff\xff\x00\x00')
         self.lstConfigReqTime = datetime.now()
+        if resp is None:
+            return None
         return QueryResponse.unpack(resp[0][16:])
 
-    def set_config(self, idx: int, value: int):
+    async def set_config(self, idx: int, value: int):
+        _LOGGER.debug(f"set_config({idx}, {value})")
         idx_h = ((idx >> 8) & 0xff).to_bytes(1, 'big')
         idx_l = (idx & 0xff).to_bytes(1, 'big')
         val_h = ((value >> 8) & 0xff).to_bytes(1, 'big')
         val_l = (value & 0xff).to_bytes(1, 'big')
-        self.send_packet(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04' + idx_h + idx_l + val_h + val_l)
+        await self.send_packet(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04' + idx_h + idx_l + val_h + val_l)
 
-    def connect(self, server_ip, server_port, serial, password):
+    async def connect(self, server_ip, server_port, serial, password):
         _LOGGER.debug("Connection to Alsavo Pro")
 
         self.clientToken = 3112
         self.serialQ = serial
         self.password = password
+        self.update_connection_status(ConnectionStatus.Disconnected)
 
         auth_intro = AuthIntro(self.clientToken, self.serialQ)
 
@@ -475,11 +459,11 @@ class AlsavoSocketCom:
 
         # Create a UDP socket at client side
         _LOGGER.debug("Asking for auth challenge")
-        auth_challenge = self.get_auth_challenge(auth_intro)
+        auth_challenge = await self.get_auth_challenge(auth_intro)
 
         if not auth_challenge.is_authorized:
             _LOGGER.error("Invalid auth challenge packet (pump offline?), disconnecting", exc_info=True)
-            self.disconnect()
+            await self.disconnect()
             return
 
         self.CSID = auth_challenge.hdr.csid
@@ -495,17 +479,17 @@ class AlsavoSocketCom:
         ctx.update(md5_hash(self.password))
 
         resp = AuthResponse(self.CSID, self.DSIS, ctx.digest())
-        response = self.send_auth_response(resp)
+        response = await self.send_auth_response(resp)
 
         if response[0].__len__() == 0:
             _LOGGER.error("Server not responding to auth response, disconnecting.")
-            self.disconnect()
+            await self.disconnect()
             return
 
         act = int.from_bytes(response[0][16:20], byteorder='little')
         if act != 0x00000005:
             _LOGGER.error("Server returned error in auth, disconnecting")
-            self.disconnect()
+            await self.disconnect()
             return
 
         self.lastPacketRcvTime = datetime.now()
@@ -513,10 +497,11 @@ class AlsavoSocketCom:
 
         _LOGGER.debug("Connection complete.")
 
-    def disconnect(self):
+    async def disconnect(self):
         _LOGGER.debug("Disconnecting")
         try:
             self.update_connection_status(ConnectionStatus.Connected)
-            self.socket.close()
+            if self.socket is not None:
+                self.socket.close()
         except Exception as e:
             _LOGGER.error(f"Disconnecting failed {e}")
