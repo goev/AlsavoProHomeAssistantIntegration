@@ -1,19 +1,18 @@
 import hashlib
 import logging
-import socket
+import random
 import struct
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from enum import Enum
+from custom_components.alsavopro.const import MODE_TO_CONFIG, NO_WATER_FLUX, WATER_TEMP_TOO_LOW, MAX_UPDATE_RETRIES, \
+     MAX_SET_CONFIG_RETRIES
+from .udpclient import UDPClient
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class AlsavoPro:
     """Alsavo Pro data handler."""
-    # Static mapping of operating modes to config keys
-    MODE_TO_CONFIG = {0: 2,  # Cool
-                      1: 1,  # Heat
-                      2: 3}  # Auto
 
     def __init__(self, name, serial_no, ip_address, port_no, password):
         """Init Alsavo Pro data handler."""
@@ -23,26 +22,42 @@ class AlsavoPro:
         self._port_no = port_no
         self._password = password
         self._data = QueryResponse(0, 0)
-        self._prev_request = datetime.now()
         self._session = AlsavoSocketCom()
+        self._set_retries = 0
+        self._update_retries = 0
+        self._online = False
 
-    async def update(self, force: bool):
+    async def update(self):
+        _LOGGER.debug(f"update")
         try:
-            # Only update if more than 10 seconds since last update
-            if not force and abs(self._prev_request - datetime.now()) < timedelta(seconds=10):
-                return
-
             await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
-            if self._session.connectionStatus == ConnectionStatus.Connected:
-                data = await self._session.query_all()
-                if data is not None:
-                    self._data = data
-                self._prev_request = datetime.now()
+            data = await self._session.query_all()
+            if data is not None:
+                self._data = data
         except Exception as e:
-            _LOGGER.error(f"Unable to connect to heatpump {e}")
-            if self._session is not None:
-                await self._session.disconnect()
-            self._data = QueryResponse(0, 0)
+            if self._update_retries < MAX_UPDATE_RETRIES:
+                self._update_retries += 1
+                await self.update()
+                self._online = True
+            else:
+                self._update_retries = 0
+                _LOGGER.error(f"Unable to update: {e}")
+                self._online = False
+
+    async def set_config(self, idx: int, value: int):
+        _LOGGER.debug(f"set_config({idx}, {value})")
+        try:
+            await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
+            await self._session.set_config(idx, value)
+        except Exception as e:
+            if self._set_retries < MAX_SET_CONFIG_RETRIES:
+                self._set_retries += 1
+                await self.set_config(idx, value)
+                self._online = True
+            else:
+                self._set_retries = 0
+                _LOGGER.error(f"Unable to set config: {idx}, {value} Error: {e}")
+                self._online = False
 
     @property
     def is_online(self) -> bool:
@@ -54,10 +69,10 @@ class AlsavoPro:
 
     @property
     def target_temperature(self):
-        return self.get_temperature_from_config(self.MODE_TO_CONFIG.get(self.operating_mode, 0))
+        return self.get_temperature_from_config(MODE_TO_CONFIG.get(self.operating_mode, 0))
 
     async def set_target_temperature(self, value: float):
-        config_key = self.MODE_TO_CONFIG.get(self.operating_mode)
+        config_key = MODE_TO_CONFIG.get(self.operating_mode)
         if config_key is not None:
             await self.set_config(config_key, int(value * 10))
 
@@ -125,9 +140,9 @@ class AlsavoPro:
     def errors(self):
         error = ""
         if self.get_status_value(48) & 0x4 == 0x4:
-            error += "No water flux or water flow switch failure.\n\r"
+            error += NO_WATER_FLUX
         if self.get_status_value(49) & 0x400 == 0x400:
-            error += "Water temperature (T2) too low protection under cooling mode.\n\r"
+            error += WATER_TEMP_TOO_LOW
         return error
 
     async def set_power_off(self):
@@ -144,18 +159,6 @@ class AlsavoPro:
 
     async def set_power_mode(self, value: int):
         await self.set_config(16, value)
-
-    async def set_config(self, idx: int, value: int):
-        try:
-            await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
-            if self._session.connectionStatus == ConnectionStatus.Disconnected:
-                raise Exception("Unable to connect to heater.")
-            await self._session.set_config(idx, value)
-        except Exception as e:
-            _LOGGER.error(f"Something went wrong: {e}")
-
-        if self._session is not None:
-            await self._session.disconnect()
 
     @property
     def name(self):
@@ -278,6 +281,7 @@ class AuthResponse:
 
 class Payload:
     """ Config, Status or device info-payload packet """
+    """ Is part of the QueryResponse packet """
     def __init__(self, data_type, sub_type, size, start_idx, indices):
         self.type = data_type
         self.subType = sub_type
@@ -392,53 +396,52 @@ class AlsavoSocketCom:
         self.serialQ = None
         self.clientToken = None
         self.lstConfigReqTime = None
-        self.socket = None
-        self.serverAddressPort = None
-        self.connectionStatus = ConnectionStatus.Disconnected
-        self.lastPacketRcvTime = datetime.now()
+        self.client = None
 
-    def update_connection_status(self, status):
-        if isinstance(status, ConnectionStatus):
-            self.connectionStatus = status
-        else:
-            raise ValueError("Illegal connection status")
-
-    async def send(self, bytes_to_send):
-        _LOGGER.debug(f"send())")
-        self.socket.sendto(bytes_to_send, self.serverAddressPort)
-        _LOGGER.debug("Waiting for response")
-        response = self.socket.recvfrom(1024)
+    async def send_and_receive(self, bytes_to_send):
+        _LOGGER.debug(f"send_and_receive())")
+        response = await self.client.send_rcv(bytes_to_send)
         _LOGGER.debug(f"Received response")
         return response
 
-    def create_socket(self, server_ip, server_port):
-        self.serverAddressPort = (server_ip, server_port)
-        self.socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        self.socket.settimeout(3)
+    async def send(self, bytes_to_send):
+        _LOGGER.debug(f"send())")
+        await self.client.send(bytes_to_send)
 
-    async def get_auth_challenge(self, auth_intro: AuthIntro):
-        response = await self.send(bytes(auth_intro.pack()))
+    async def get_auth_challenge(self):
+        auth_intro = AuthIntro(self.clientToken, self.serialQ)
+        response = await self.send_and_receive(bytes(auth_intro.pack()))
         return AuthChallenge.unpack(response[0])
 
-    async def send_auth_response(self, resp: AuthResponse):
-        return await self.send(resp.pack())
+    async def send_auth_response(self, ctx):
+        resp = AuthResponse(self.CSID, self.DSIS, ctx.digest())
+        return await self.send_and_receive(resp.pack())
+
+    async def send_and_rcv_packet(self, payload: bytes, cmd=0xf4):
+        _LOGGER.debug(f"send_and_rcv_packet(payload, {cmd})")
+        if self.CSID is not None and self.DSIS is not None:
+            return await self.send_and_receive(
+                PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, payload.__len__()).pack() + payload
+            )
+        return None
 
     async def send_packet(self, payload: bytes, cmd=0xf4):
         _LOGGER.debug(f"send_packet(payload, {cmd})")
         if self.CSID is not None and self.DSIS is not None:
-            return await self.send(PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, payload.__len__()).pack() + payload)
-        return None
+            await self.send(PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, payload.__len__()).pack() + payload)
 
     async def query_all(self):
-        _LOGGER.debug("query_all")
-        resp = await self.send_packet(b'\x08\x01\x00\x00\x00\x02\x00\x2e\xff\xff\x00\x00')
+        """ Query all information from the heat pump """
+        _LOGGER.debug("socket.query_all")
+        resp = await self.send_and_rcv_packet(b'\x08\x01\x00\x00\x00\x02\x00\x2e\xff\xff\x00\x00')
         self.lstConfigReqTime = datetime.now()
         if resp is None:
-            return None
+            raise Exception("query_all: no response")
         return QueryResponse.unpack(resp[0][16:])
 
     async def set_config(self, idx: int, value: int):
-        _LOGGER.debug(f"set_config({idx}, {value})")
+        """ Set configuration values on the heat pump """
+        _LOGGER.debug(f"socket.set_config({idx}, {value})")
         idx_h = ((idx >> 8) & 0xff).to_bytes(1, 'big')
         idx_l = (idx & 0xff).to_bytes(1, 'big')
         val_h = ((value >> 8) & 0xff).to_bytes(1, 'big')
@@ -446,25 +449,18 @@ class AlsavoSocketCom:
         await self.send_packet(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04' + idx_h + idx_l + val_h + val_l)
 
     async def connect(self, server_ip, server_port, serial, password):
-        _LOGGER.debug("Connection to Alsavo Pro")
+        _LOGGER.debug("Connecting to Alsavo Pro")
 
-        self.clientToken = 3112
+        self.clientToken = random.randint(0, 65535)
         self.serialQ = serial
         self.password = password
-        self.update_connection_status(ConnectionStatus.Disconnected)
+        self.client = UDPClient(server_ip, server_port)
 
-        auth_intro = AuthIntro(self.clientToken, self.serialQ)
-
-        self.create_socket(server_ip, server_port)
-
-        # Create a UDP socket at client side
         _LOGGER.debug("Asking for auth challenge")
-        auth_challenge = await self.get_auth_challenge(auth_intro)
+        auth_challenge = await self.get_auth_challenge()
 
         if not auth_challenge.is_authorized:
-            _LOGGER.error("Invalid auth challenge packet (pump offline?), disconnecting", exc_info=True)
-            await self.disconnect()
-            return
+            raise ConnectionError("Invalid auth challenge packet (pump offline?), disconnecting")
 
         self.CSID = auth_challenge.hdr.csid
         self.DSIS = auth_challenge.hdr.dsid
@@ -478,30 +474,13 @@ class AlsavoSocketCom:
         ctx.update(self.serverToken.to_bytes(4, "big"))
         ctx.update(md5_hash(self.password))
 
-        resp = AuthResponse(self.CSID, self.DSIS, ctx.digest())
-        response = await self.send_auth_response(resp)
+        response = await self.send_auth_response(ctx)
 
-        if response[0].__len__() == 0:
-            _LOGGER.error("Server not responding to auth response, disconnecting.")
-            await self.disconnect()
-            return
+        if response is None or response[0].__len__() == 0:
+            raise ConnectionError("Server not responding to auth response, disconnecting.")
 
         act = int.from_bytes(response[0][16:20], byteorder='little')
         if act != 0x00000005:
-            _LOGGER.error("Server returned error in auth, disconnecting")
-            await self.disconnect()
-            return
+            raise ConnectionError("Server returned error in auth, disconnecting")
 
-        self.lastPacketRcvTime = datetime.now()
-        self.update_connection_status(ConnectionStatus.Connected)
-
-        _LOGGER.debug("Connection complete.")
-
-    async def disconnect(self):
-        _LOGGER.debug("Disconnecting")
-        try:
-            self.update_connection_status(ConnectionStatus.Connected)
-            if self.socket is not None:
-                self.socket.close()
-        except Exception as e:
-            _LOGGER.error(f"Disconnecting failed {e}")
+        _LOGGER.debug("Connected.")

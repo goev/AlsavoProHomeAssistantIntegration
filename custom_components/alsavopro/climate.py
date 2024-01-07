@@ -18,9 +18,16 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 
-from .AlsavoPyCtrl import AlsavoPro
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
+
+from . import AlsavoProDataCoordinator
 from .const import (
-    DOMAIN
+    DOMAIN,
+    POWER_MODE_MAP
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,13 +37,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([AlsavoProClimate(hass.data[DOMAIN][entry.entry_id])])
 
 
-class AlsavoProClimate(ClimateEntity):
+class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     """ Climate platform for Alsavo Pro pool heater """
 
-    def __init__(self, data_handler: AlsavoPro):
+    def __init__(self, coordinator: AlsavoProDataCoordinator):
         """Initialize the heater."""
-        self._name = data_handler.name
-        self._data_handler = data_handler
+        super().__init__(coordinator)
+        self.coordinator = coordinator
+        self._data_handler = self.coordinator.data_handler
+        self._name = self._data_handler.name
 
     @property
     def supported_features(self):
@@ -52,6 +61,11 @@ class AlsavoProClimate(ClimateEntity):
     def name(self):
         """Return the name of the device, if any."""
         return self._name
+
+    @property
+    def available(self) -> bool:
+        """Return True if roller and hub is available."""
+        return self._data_handler.is_online
 
     @property
     def hvac_mode(self):
@@ -70,13 +84,7 @@ class AlsavoProClimate(ClimateEntity):
     @property
     def preset_mode(self):
         """Return Preset modes silent, smart mode."""
-        power_mode_map = {
-            0: 'Silent',
-            1: 'Smart',
-            2: 'Powerful'
-        }
-
-        return power_mode_map.get(self._data_handler.power_mode)
+        return POWER_MODE_MAP.get(self._data_handler.power_mode)
 
     @property
     def icon(self):
@@ -111,8 +119,7 @@ class AlsavoProClimate(ClimateEntity):
         action = hvac_mode_actions.get(hvac_mode)
         if action:
             await action()
-
-        await self._data_handler.update(True)
+            await self.coordinator.async_request_refresh()
 
     async def async_set_preset_mode(self, preset_mode):
         """Set hvac preset mode."""
@@ -125,7 +132,7 @@ class AlsavoProClimate(ClimateEntity):
         power_mode = preset_mode_to_power_mode.get(preset_mode)
         if power_mode is not None:
             await self._data_handler.set_power_mode(power_mode)
-        await self._data_handler.update(True)
+            await self.coordinator.async_request_refresh()
 
     @property
     def temperature_unit(self):
@@ -163,11 +170,8 @@ class AlsavoProClimate(ClimateEntity):
         if temperature is None:
             return
         await self._data_handler.set_target_temperature(temperature)
-
-        await self._data_handler.update(True)
-
-        return
+        await self.coordinator.async_request_refresh()
 
     async def async_update(self):
         """Get the latest data."""
-        await self._data_handler.update(False)
+        self._data_handler = self.coordinator.data_handler
