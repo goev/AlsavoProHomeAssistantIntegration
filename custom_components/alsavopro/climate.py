@@ -5,9 +5,8 @@ from homeassistant.components.climate import (
     PLATFORM_SCHEMA,
     ClimateEntity,
     ClimateEntityFeature,
-    HVACMode
+    HVACMode,
 )
-
 from homeassistant.const import (
     ATTR_TEMPERATURE,
     CONF_PASSWORD,
@@ -17,24 +16,16 @@ from homeassistant.const import (
     PRECISION_TENTHS,
     UnitOfTemperature,
 )
-
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-    UpdateFailed,
-)
-
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import AlsavoProDataCoordinator
-from .const import (
-    DOMAIN,
-    POWER_MODE_MAP
-)
+from .const import DOMAIN, POWER_MODE_MAP
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([AlsavoProClimate(hass.data[DOMAIN][entry.entry_id])])
+
 
 class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     """Climate platform for Alsavo Pro pool heater."""
@@ -96,6 +87,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         return ["Silent", "Smart", "Powerful"]
 
     async def async_set_hvac_mode(self, hvac_mode):
+        _LOGGER.info("Setting HVAC mode to %s.", hvac_mode)
         hvac_mode_actions = {
             HVACMode.OFF: self._data_handler.set_power_off,
             HVACMode.COOL: self._data_handler.set_cooling_mode,
@@ -106,9 +98,15 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         if action:
             success = await action()
             if success:
+                _LOGGER.info("HVAC mode set to %s successfully.", hvac_mode)
                 await self.coordinator.async_request_refresh()
+            else:
+                _LOGGER.error("Failed to set HVAC mode to %s.", hvac_mode)
+        else:
+            _LOGGER.error("Invalid HVAC mode: %s.", hvac_mode)
 
     async def async_set_preset_mode(self, preset_mode):
+        _LOGGER.info("Setting preset mode to %s.", preset_mode)
         preset_mode_to_power_mode = {
             "Silent": 0,
             "Smart": 1,
@@ -118,7 +116,12 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         if power_mode is not None:
             success = await self._data_handler.set_power_mode(power_mode)
             if success:
+                _LOGGER.info("Preset mode set to %s successfully.", preset_mode)
                 await self.coordinator.async_request_refresh()
+            else:
+                _LOGGER.error("Failed to set preset mode to %s.", preset_mode)
+        else:
+            _LOGGER.error("Invalid preset mode: %s.", preset_mode)
 
     @property
     def temperature_unit(self):
@@ -148,21 +151,30 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
+            _LOGGER.error("No temperature provided.")
             return
 
-        # Validate the temperature
-        if not (self.min_temp <= temperature <= self.max_temp):
+        if not self._is_valid_temperature(temperature):
             _LOGGER.error(
-                "Invalid temperature: %s. Must be between %s and %s.",
+                "Invalid temperature: %s°C. Valid range is %s°C - %s°C.",
                 temperature,
                 self.min_temp,
                 self.max_temp,
             )
             return
 
+        _LOGGER.info("Setting target temperature to %s°C.", temperature)
         success = await self._data_handler.set_target_temperature(temperature)
         if success:
+            _LOGGER.info("Target temperature set to %s°C successfully.", temperature)
             await self.coordinator.async_request_refresh()
+        else:
+            _LOGGER.error("Failed to set target temperature to %s°C.", temperature)
+
+    def _is_valid_temperature(self, temperature):
+        """Validate temperature against min and max limits."""
+        return self.min_temp <= temperature <= self.max_temp
 
     async def async_update(self):
+        _LOGGER.debug("Updating Alsavo Pro Climate data.")
         self._data_handler = self.coordinator.data_handler
