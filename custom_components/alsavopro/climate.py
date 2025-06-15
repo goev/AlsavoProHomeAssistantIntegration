@@ -163,13 +163,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             success = await self._data_handler.set_target_temperature(temperature)
             if success:
                 _LOGGER.info("✅ Target temperature set to %s°C", temperature)
-                await self.coordinator.async_request_refresh()
-            else:
-                _LOGGER.warning(
-                    "⚠️ No confirmation received for temperature %s°C, but the device may have accepted it.",
-                    temperature,
-                )
-                await self.coordinator.async_request_refresh()
+            await self.coordinator.async_request_refresh()
         except Exception as e:
             _LOGGER.exception("❌ Exception occurred while setting temperature: %s", e)
 
