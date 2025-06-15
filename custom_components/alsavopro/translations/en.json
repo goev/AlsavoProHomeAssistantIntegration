@@ -1,21 +1,39 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "Account is already configured"
-        },
-        "error": {
-            "connection_error": "Failed to connect"
-        },
-        "step": {
-            "user": {
-                "data": {
-                    "name": "Device name",
-                    "serial_no": "Heatpump serial no",
-                    "ip_address": "IP-address",
-                    "port": "Port no",
-                    "password": "Password"
-                }
-            }
+  "title": "AlsavoPro Pool Heater",
+  "config": {
+    "abort": {
+      "already_configured": "Account is already configured"
+    },
+    "error": {
+      "connection_error": "Failed to connect",
+      "cannot_connect": "Could not connect to the AlsavoPro device. Please check the IP address, port, and password.",
+      "already_configured": "This AlsavoPro device is already configured.",
+      "missing": "This field is required.",
+      "unknown": "An unknown error occurred. Please try again."
+    },
+    "step": {
+      "user": {
+        "title": "Configure AlsavoPro Pool Heater",
+        "description": "Enter the details to connect your AlsavoPro pool heater.",
+        "data": {
+          "name": "Device name",
+          "serial_no": "Heatpump serial no",
+          "ip_address": "IP-address",
+          "port": "Port no",
+          "password": "Password"
         }
+      }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Adjust AlsavoPro Options",
+        "description": "You can update your configuration settings here.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    }
+  }
 }
