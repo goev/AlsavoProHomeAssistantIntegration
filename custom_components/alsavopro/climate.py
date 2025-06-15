@@ -1,22 +1,17 @@
-"""Support for Alsavo Pro wifi-enabled pool heaters."""
+"""Support for Alsavo Pro WiFi-enabled pool heaters."""
 import logging
 
 from homeassistant.components.climate import (
-    PLATFORM_SCHEMA,
     ClimateEntity,
     ClimateEntityFeature,
     HVACMode,
 )
 from homeassistant.const import (
     ATTR_TEMPERATURE,
-    CONF_PASSWORD,
-    CONF_IP_ADDRESS,
-    CONF_PORT,
-    CONF_NAME,
-    PRECISION_TENTHS,
     UnitOfTemperature,
 )
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from . import AlsavoProDataCoordinator
 from .const import DOMAIN, POWER_MODE_MAP
 
@@ -87,7 +82,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         return ["Silent", "Smart", "Powerful"]
 
     async def async_set_hvac_mode(self, hvac_mode):
-        _LOGGER.info("Setting HVAC mode to %s.", hvac_mode)
+        _LOGGER.info("Setting HVAC mode to %s", hvac_mode)
         hvac_mode_actions = {
             HVACMode.OFF: self._data_handler.set_power_off,
             HVACMode.COOL: self._data_handler.set_cooling_mode,
@@ -106,7 +101,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             _LOGGER.error("Invalid HVAC mode: %s.", hvac_mode)
 
     async def async_set_preset_mode(self, preset_mode):
-        _LOGGER.info("Setting preset mode to %s.", preset_mode)
+        _LOGGER.info("Setting preset mode to %s", preset_mode)
         preset_mode_to_power_mode = {
             "Silent": 0,
             "Smart": 1,
@@ -121,7 +116,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             else:
                 _LOGGER.error("Failed to set preset mode to %s.", preset_mode)
         else:
-            _LOGGER.error("Invalid preset mode: %s.", preset_mode)
+            _LOGGER.error("Invalid preset mode: %s", preset_mode)
 
     @property
     def temperature_unit(self):
@@ -163,13 +158,20 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             )
             return
 
-        _LOGGER.info("Setting target temperature to %s°C.", temperature)
-        success = await self._data_handler.set_target_temperature(temperature)
-        if success:
-            _LOGGER.info("Target temperature set to %s°C successfully.", temperature)
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.error("Failed to set target temperature to %s°C.", temperature)
+        _LOGGER.info("Setting target temperature to %s°C", temperature)
+        try:
+            success = await self._data_handler.set_target_temperature(temperature)
+            if success:
+                _LOGGER.info("✅ Target temperature set to %s°C", temperature)
+                await self.coordinator.async_request_refresh()
+            else:
+                _LOGGER.warning(
+                    "⚠️ No confirmation received for temperature %s°C, but the device may have accepted it.",
+                    temperature,
+                )
+                await self.coordinator.async_request_refresh()
+        except Exception as e:
+            _LOGGER.exception("❌ Exception occurred while setting temperature: %s", e)
 
     def _is_valid_temperature(self, temperature):
         """Validate temperature against min and max limits."""
