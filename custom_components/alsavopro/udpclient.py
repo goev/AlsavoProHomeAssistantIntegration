@@ -1,21 +1,19 @@
 import asyncio
 import logging
-import socket
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class UDPClient:
-    """Async UDP client for Alsavo Pro integration."""
+    """Async UDP client with retry and broadcast support."""
 
-    def __init__(self, server_host, server_port, enable_broadcast=False):
+    def __init__(self, server_host, server_port, use_broadcast=False):
         self.server_host = server_host
         self.server_port = server_port
-        self.enable_broadcast = enable_broadcast
+        self.use_broadcast = use_broadcast
         self.loop = asyncio.get_event_loop()
 
     class SimpleClientProtocol(asyncio.DatagramProtocol):
-        """UDP protocol for sending only."""
         def __init__(self, message):
             self.message = message
             self.transport = None
@@ -26,7 +24,6 @@ class UDPClient:
             self.transport.close()
 
     class EchoClientProtocol(asyncio.DatagramProtocol):
-        """UDP protocol for sending and receiving."""
         def __init__(self, message, future):
             self.message = message
             self.future = future
@@ -50,42 +47,44 @@ class UDPClient:
                 self.future.set_exception(ConnectionError("Connection lost"))
 
     async def send_rcv(self, bytes_to_send, retries=3):
-        """Send and receive a UDP packet with retry support."""
+        """Send data and wait for response, with retries."""
         for attempt in range(1, retries + 1):
             future = self.loop.create_future()
+
             try:
-                _LOGGER.debug("UDP send_rcv attempt %d to %s:%s", attempt, self.server_host, self.server_port)
                 transport, protocol = await self.loop.create_datagram_endpoint(
                     lambda: self.EchoClientProtocol(bytes_to_send, future),
                     remote_addr=(self.server_host, self.server_port),
-                    allow_broadcast=self.enable_broadcast
+                    allow_broadcast=self.use_broadcast,
                 )
 
-                data = await asyncio.wait_for(future, timeout=10.0)
-                _LOGGER.debug("Received UDP response: %s", data.hex())
+                _LOGGER.debug("UDP send attempt %d to %s:%d", attempt, self.server_host, self.server_port)
+                data = await asyncio.wait_for(future, timeout=5.0)
+
+                _LOGGER.debug("UDP received response (attempt %d): %s", attempt, data.hex())
                 return data, b'0'
 
             except asyncio.TimeoutError:
-                _LOGGER.warning("Timeout on attempt %d: No response from %s:%s", attempt, self.server_host, self.server_port)
+                _LOGGER.warning("UDP timeout on attempt %d: no response", attempt)
             except Exception as e:
-                _LOGGER.error("Error on attempt %d: %s", attempt, str(e))
+                _LOGGER.error("UDP error on attempt %d: %s", attempt, str(e))
             finally:
                 if 'transport' in locals():
                     transport.close()
 
-        _LOGGER.error("All %d UDP attempts failed to %s:%s", retries, self.server_host, self.server_port)
+        _LOGGER.error("All %d UDP attempts failed", retries)
         return None
 
     async def send(self, bytes_to_send):
-        """Send a UDP packet without expecting a response."""
+        """Send UDP message without waiting for a response."""
         try:
-            _LOGGER.debug("Sending UDP packet to %s:%s", self.server_host, self.server_port)
             transport, protocol = await self.loop.create_datagram_endpoint(
                 lambda: self.SimpleClientProtocol(bytes_to_send),
                 remote_addr=(self.server_host, self.server_port),
-                allow_broadcast=self.enable_broadcast
+                allow_broadcast=self.use_broadcast,
             )
+            _LOGGER.debug("UDP fire-and-forget sent to %s:%d", self.server_host, self.server_port)
         except Exception as e:
-            _LOGGER.error("UDP send failed: %s", str(e))
+            _LOGGER.error("UDP send error: %s", str(e))
         else:
             transport.close()
