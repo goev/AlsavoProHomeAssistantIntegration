@@ -1,5 +1,6 @@
 """Support for Alsavo Pro WiFi-enabled pool heaters."""
 import logging
+import asyncio
 
 from homeassistant.components.climate import (
     ClimateEntity,
@@ -94,7 +95,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             success = await action()
             if success:
                 _LOGGER.info("HVAC mode set to %s successfully.", hvac_mode)
-                await self.coordinator.async_request_refresh()
+                asyncio.create_task(self.coordinator.async_request_refresh())
 
     async def async_set_preset_mode(self, preset_mode):
         _LOGGER.info("Setting preset mode to %s", preset_mode)
@@ -108,7 +109,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             success = await self._data_handler.set_power_mode(power_mode)
             if success:
                 _LOGGER.info("Preset mode set to %s successfully.", preset_mode)
-                await self.coordinator.async_request_refresh()
+                asyncio.create_task(self.coordinator.async_request_refresh())
 
     @property
     def temperature_unit(self):
@@ -137,14 +138,20 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     async def async_set_temperature(self, **kwargs):
         """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
-        if temperature is None or not self._is_valid_temperature(temperature):
+        if temperature is None:
+            return
+
+        if not self._is_valid_temperature(temperature):
             return
 
         _LOGGER.info("Setting target temperature to %s°C", temperature)
-        success = await self._data_handler.set_target_temperature(temperature)
-        if success:
-            _LOGGER.info("✅ Target temperature set to %s°C", temperature)
-        await self.coordinator.async_request_refresh()
+        try:
+            success = await self._data_handler.set_target_temperature(temperature)
+            if success:
+                _LOGGER.info("✅ Target temperature set to %s°C", temperature)
+                asyncio.create_task(self.coordinator.async_request_refresh())
+        except Exception as e:
+            _LOGGER.exception("❌ Exception occurred while setting temperature: %s", e)
 
     def _is_valid_temperature(self, temperature):
         """Validate temperature against min and max limits."""
