@@ -96,7 +96,6 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         return ["Silent", "Smart", "Powerful"]
 
     async def async_set_hvac_mode(self, hvac_mode):
-        _LOGGER.info("Setting HVAC mode to %s", hvac_mode)
         hvac_mode_actions = {
             HVACMode.OFF: self._data_handler.set_power_off,
             HVACMode.COOL: self._data_handler.set_cooling_mode,
@@ -104,16 +103,66 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             HVACMode.AUTO: self._data_handler.set_auto_mode,
         }
         action = hvac_mode_actions.get(hvac_mode)
-
         if action:
             success = await action()
             if success:
-                _LOGGER.info("HVAC mode set to %s successfully.", hvac_mode)
                 await self.coordinator.async_request_refresh()
-            else:
-                _LOGGER.error("Failed to set HVAC mode to %s.", hvac_mode)
-        else:
-            _LOGGER.error("Invalid HVAC mode: %s.", hvac_mode)
 
     async def async_set_preset_mode(self, preset_mode):
-        _LOGGER.info("Setting preset mode to %s", preset_
+        preset_mode_to_power_mode = {
+            "Silent": 0,
+            "Smart": 1,
+            "Powerful": 2,
+        }
+        power_mode = preset_mode_to_power_mode.get(preset_mode)
+        if power_mode is not None:
+            success = await self._data_handler.set_power_mode(power_mode)
+            if success:
+                await self.coordinator.async_request_refresh()
+
+    @property
+    def temperature_unit(self):
+        return UnitOfTemperature.CELSIUS
+
+    @property
+    def min_temp(self):
+        return self._data_handler.get_temperature_from_status(56)
+
+    @property
+    def max_temp(self):
+        return self._data_handler.get_temperature_from_status(55)
+
+    @property
+    def current_temperature(self):
+        return self._data_handler.water_in_temperature
+
+    @property
+    def target_temperature(self):
+        return self._data_handler.target_temperature
+
+    @property
+    def target_temperature_step(self):
+        return 1
+
+    async def async_set_temperature(self, **kwargs):
+        """Set new target temperature."""
+        temperature = kwargs.get(ATTR_TEMPERATURE)
+        if temperature is None:
+            return
+
+        # Validate the temperature
+        if not (self.min_temp <= temperature <= self.max_temp):
+            _LOGGER.error(
+                "Invalid temperature: %s. Must be between %s and %s.",
+                temperature,
+                self.min_temp,
+                self.max_temp,
+            )
+            return
+
+        success = await self._data_handler.set_target_temperature(temperature)
+        if success:
+            await self.coordinator.async_request_refresh()
+
+    async def async_update(self):
+        self._data_handler = self.coordinator.data_handler
