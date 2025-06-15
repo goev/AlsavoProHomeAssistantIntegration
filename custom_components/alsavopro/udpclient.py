@@ -61,7 +61,7 @@ class UDPClient:
                     allow_broadcast=self.enable_broadcast
                 )
 
-                data = await asyncio.wait_for(future, timeout=5.0)
+                data = await asyncio.wait_for(future, timeout=10.0)
                 _LOGGER.debug("Received UDP response: %s", data.hex())
                 return data, b'0'
 
