@@ -104,8 +104,9 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         }
         action = hvac_mode_actions.get(hvac_mode)
         if action:
-            await action()
-            await self.coordinator.async_request_refresh()
+            success = await action()
+            if success:
+                await self.coordinator.async_request_refresh()
 
     async def async_set_preset_mode(self, preset_mode):
         preset_mode_to_power_mode = {
@@ -115,8 +116,9 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         }
         power_mode = preset_mode_to_power_mode.get(preset_mode)
         if power_mode is not None:
-            await self._data_handler.set_power_mode(power_mode)
-            await self.coordinator.async_request_refresh()
+            success = await self._data_handler.set_power_mode(power_mode)
+            if success:
+                await self.coordinator.async_request_refresh()
 
     @property
     def temperature_unit(self):
@@ -143,9 +145,23 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         return 1
 
     async def async_set_temperature(self, **kwargs):
+        """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
-        if temperature is not None:
-            await self._data_handler.set_target_temperature(temperature)
+        if temperature is None:
+            return
+
+        # Validate the temperature
+        if not (self.min_temp <= temperature <= self.max_temp):
+            _LOGGER.error(
+                "Invalid temperature: %s. Must be between %s and %s.",
+                temperature,
+                self.min_temp,
+                self.max_temp,
+            )
+            return
+
+        success = await self._data_handler.set_target_temperature(temperature)
+        if success:
             await self.coordinator.async_request_refresh()
 
     async def async_update(self):
