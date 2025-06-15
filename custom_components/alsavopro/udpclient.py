@@ -1,40 +1,45 @@
 import asyncio
 import logging
-from typing import Optional, Tuple
+import socket
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class UDPClient:
-    """Async UDP client for sending and receiving UDP packets with retry logic."""
+    """Async UDP client for Alsavo Pro integration."""
 
-    def __init__(self, server_host: str, server_port: int):
+    def __init__(self, server_host, server_port, enable_broadcast=False):
         self.server_host = server_host
         self.server_port = server_port
+        self.enable_broadcast = enable_broadcast
+        self.loop = asyncio.get_event_loop()
 
     class SimpleClientProtocol(asyncio.DatagramProtocol):
-        def __init__(self, message: bytes):
+        """UDP protocol for sending only."""
+        def __init__(self, message):
             self.message = message
+            self.transport = None
 
         def connection_made(self, transport):
-            transport.sendto(self.message)
-            transport.close()
+            self.transport = transport
+            self.transport.sendto(self.message)
+            self.transport.close()
 
     class EchoClientProtocol(asyncio.DatagramProtocol):
-        def __init__(self, message: bytes, future: asyncio.Future):
+        """UDP protocol for sending and receiving."""
+        def __init__(self, message, future):
             self.message = message
             self.future = future
             self.transport = None
 
         def connection_made(self, transport):
             self.transport = transport
-            transport.sendto(self.message)
+            self.transport.sendto(self.message)
 
         def datagram_received(self, data, addr):
             if not self.future.done():
                 self.future.set_result(data)
-            if self.transport:
-                self.transport.close()
+            self.transport.close()
 
         def error_received(self, exc):
             if not self.future.done():
@@ -44,45 +49,43 @@ class UDPClient:
             if not self.future.done():
                 self.future.set_exception(ConnectionError("Connection lost"))
 
-    async def send(self, bytes_to_send: bytes, retries: int = 3, retry_delay: float = 1.0) -> bool:
-        """Send a UDP packet with retries."""
-        for attempt in range(retries):
+    async def send_rcv(self, bytes_to_send, retries=3):
+        """Send and receive a UDP packet with retry support."""
+        for attempt in range(1, retries + 1):
+            future = self.loop.create_future()
             try:
-                loop = asyncio.get_running_loop()
-                transport, _ = await loop.create_datagram_endpoint(
-                    lambda: self.SimpleClientProtocol(bytes_to_send),
-                    remote_addr=(self.server_host, self.server_port)
-                )
-                transport.close()
-                return True
-            except Exception as e:
-                _LOGGER.warning(f"UDP send attempt {attempt + 1} failed: {e}")
-                await asyncio.sleep(retry_delay)
-        _LOGGER.error("All UDP send attempts failed.")
-        return False
-
-    async def send_rcv(
-        self, bytes_to_send: bytes, retries: int = 3, retry_delay: float = 1.0
-    ) -> Optional[Tuple[bytes, bytes]]:
-        """Send a UDP packet and wait for a response, with retries."""
-        for attempt in range(retries):
-            try:
-                loop = asyncio.get_running_loop()
-                future = loop.create_future()
-                transport, _ = await loop.create_datagram_endpoint(
+                _LOGGER.debug("UDP send_rcv attempt %d to %s:%s", attempt, self.server_host, self.server_port)
+                transport, protocol = await self.loop.create_datagram_endpoint(
                     lambda: self.EchoClientProtocol(bytes_to_send, future),
-                    remote_addr=(self.server_host, self.server_port)
+                    remote_addr=(self.server_host, self.server_port),
+                    allow_broadcast=self.enable_broadcast
                 )
-                try:
-                    data = await asyncio.wait_for(future, timeout=5.0)
-                    return data, b'0'
-                finally:
-                    transport.close()
-            except (asyncio.TimeoutError, ConnectionError) as e:
-                _LOGGER.warning(f"Attempt {attempt + 1} failed with timeout or connection error: {e}")
+
+                data = await asyncio.wait_for(future, timeout=5.0)
+                _LOGGER.debug("Received UDP response: %s", data.hex())
+                return data, b'0'
+
+            except asyncio.TimeoutError:
+                _LOGGER.warning("Timeout on attempt %d: No response from %s:%s", attempt, self.server_host, self.server_port)
             except Exception as e:
-                _LOGGER.error(f"Unexpected error on attempt {attempt + 1}: {e}")
-                break  # Don't retry on unknown errors
-            await asyncio.sleep(retry_delay)
-        _LOGGER.error("All UDP send/receive attempts failed.")
+                _LOGGER.error("Error on attempt %d: %s", attempt, str(e))
+            finally:
+                if 'transport' in locals():
+                    transport.close()
+
+        _LOGGER.error("All %d UDP attempts failed to %s:%s", retries, self.server_host, self.server_port)
         return None
+
+    async def send(self, bytes_to_send):
+        """Send a UDP packet without expecting a response."""
+        try:
+            _LOGGER.debug("Sending UDP packet to %s:%s", self.server_host, self.server_port)
+            transport, protocol = await self.loop.create_datagram_endpoint(
+                lambda: self.SimpleClientProtocol(bytes_to_send),
+                remote_addr=(self.server_host, self.server_port),
+                allow_broadcast=self.enable_broadcast
+            )
+        except Exception as e:
+            _LOGGER.error("UDP send failed: %s", str(e))
+        else:
+            transport.close()
