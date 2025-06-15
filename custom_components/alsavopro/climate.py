@@ -95,10 +95,6 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             if success:
                 _LOGGER.info("HVAC mode set to %s successfully.", hvac_mode)
                 await self.coordinator.async_request_refresh()
-            else:
-                _LOGGER.error("Failed to set HVAC mode to %s.", hvac_mode)
-        else:
-            _LOGGER.error("Invalid HVAC mode: %s.", hvac_mode)
 
     async def async_set_preset_mode(self, preset_mode):
         _LOGGER.info("Setting preset mode to %s", preset_mode)
@@ -113,10 +109,6 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             if success:
                 _LOGGER.info("Preset mode set to %s successfully.", preset_mode)
                 await self.coordinator.async_request_refresh()
-            else:
-                _LOGGER.error("Failed to set preset mode to %s.", preset_mode)
-        else:
-            _LOGGER.error("Invalid preset mode: %s", preset_mode)
 
     @property
     def temperature_unit(self):
@@ -145,27 +137,14 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     async def async_set_temperature(self, **kwargs):
         """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
-        if temperature is None:
-            _LOGGER.error("No temperature provided.")
-            return
-
-        if not self._is_valid_temperature(temperature):
-            _LOGGER.error(
-                "Invalid temperature: %s°C. Valid range is %s°C - %s°C.",
-                temperature,
-                self.min_temp,
-                self.max_temp,
-            )
+        if temperature is None or not self._is_valid_temperature(temperature):
             return
 
         _LOGGER.info("Setting target temperature to %s°C", temperature)
-        try:
-            success = await self._data_handler.set_target_temperature(temperature)
-            if success:
-                _LOGGER.info("✅ Target temperature set to %s°C", temperature)
-            await self.coordinator.async_request_refresh()
-        except Exception as e:
-            _LOGGER.exception("❌ Exception occurred while setting temperature: %s", e)
+        success = await self._data_handler.set_target_temperature(temperature)
+        if success:
+            _LOGGER.info("✅ Target temperature set to %s°C", temperature)
+        await self.coordinator.async_request_refresh()
 
     def _is_valid_temperature(self, temperature):
         """Validate temperature against min and max limits."""
