@@ -1,20 +1,15 @@
 {
-  "title": "AlsavoPro Pool Heater",
   "config": {
     "abort": {
       "already_configured": "Account is already configured"
     },
     "error": {
       "connection_error": "Failed to connect",
-      "cannot_connect": "Could not connect to the AlsavoPro device. Please check the IP address, port, and password.",
-      "already_configured": "This AlsavoPro device is already configured.",
-      "missing": "This field is required.",
-      "unknown": "An unknown error occurred. Please try again."
+      "missing_name": "Device name is required",
+      "missing_password": "Password is required"
     },
     "step": {
       "user": {
-        "title": "Configure AlsavoPro Pool Heater",
-        "description": "Enter the details to connect your AlsavoPro pool heater.",
         "data": {
           "name": "Device name",
           "serial_no": "Heatpump serial no",
@@ -25,14 +20,12 @@
       }
     }
   },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Adjust AlsavoPro Options",
-        "description": "You can update your configuration settings here.",
-        "data": {
-          "password": "Password"
-        }
+  "state": {
+    "alsavopro": {
+      "errors": {
+        "no_water_flux": "No water flux or water flow switch failure.",
+        "water_temp_too_low": "Water temperature (T2) too low protection under cooling mode.",
+        "unknown": "Unknown error"
       }
     }
   }
