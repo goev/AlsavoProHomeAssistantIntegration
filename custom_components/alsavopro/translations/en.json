@@ -1,21 +1,32 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "Account is already configured"
-        },
-        "error": {
-            "connection_error": "Failed to connect"
-        },
-        "step": {
-            "user": {
-                "data": {
-                    "name": "Device name",
-                    "serial_no": "Heatpump serial no",
-                    "ip_address": "IP-address",
-                    "port": "Port no",
-                    "password": "Password"
-                }
-            }
+  "config": {
+    "abort": {
+      "already_configured": "Account is already configured"
+    },
+    "error": {
+      "connection_error": "Failed to connect",
+      "missing_name": "Device name is required",
+      "missing_password": "Password is required"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "name": "Device name",
+          "serial_no": "Heatpump serial no",
+          "ip_address": "IP-address",
+          "port": "Port no",
+          "password": "Password"
         }
+      }
     }
+  },
+  "state": {
+    "alsavopro": {
+      "errors": {
+        "no_water_flux": "No water flux or water flow switch failure.",
+        "water_temp_too_low": "Water temperature (T2) too low protection under cooling mode.",
+        "unknown": "Unknown error"
+      }
+    }
+  }
 }
