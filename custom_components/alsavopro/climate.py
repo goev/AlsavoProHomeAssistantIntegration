@@ -1,27 +1,40 @@
-"""Support for Alsavo Pro WiFi-enabled pool heaters."""
+"""Support for Alsavo Pro wifi-enabled pool heaters."""
 import logging
-import asyncio
 
 from homeassistant.components.climate import (
+    PLATFORM_SCHEMA,
     ClimateEntity,
     ClimateEntityFeature,
-    HVACMode,
+    HVACMode
 )
+
 from homeassistant.const import (
     ATTR_TEMPERATURE,
+    CONF_PASSWORD,
+    CONF_IP_ADDRESS,
+    CONF_PORT,
+    CONF_NAME,
+    PRECISION_TENTHS,
     UnitOfTemperature,
 )
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
 
 from . import AlsavoProDataCoordinator
-from .const import DOMAIN, POWER_MODE_MAP
+from .const import (
+    DOMAIN,
+    POWER_MODE_MAP
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([AlsavoProClimate(hass.data[DOMAIN][entry.entry_id])])
-
 
 class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     """Climate platform for Alsavo Pro pool heater."""
@@ -53,6 +66,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         operating_mode_map = {
             0: HVACMode.COOL,
             1: HVACMode.HEAT,
+            2: HVACMode.AUTO,
         }
         return (
             HVACMode.OFF
@@ -69,33 +83,31 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         hvac_mode_icons = {
             HVACMode.HEAT: "mdi:fire",
             HVACMode.COOL: "mdi:snowflake",
+            HVACMode.AUTO: "mdi:refresh-auto",
         }
         return hvac_mode_icons.get(self.hvac_mode, "mdi:hvac-off")
 
     @property
     def hvac_modes(self):
-        return [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
+        return [HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO, HVACMode.OFF]
 
     @property
     def preset_modes(self):
         return ["Silent", "Smart", "Powerful"]
 
     async def async_set_hvac_mode(self, hvac_mode):
-        _LOGGER.info("Setting HVAC mode to %s", hvac_mode)
         hvac_mode_actions = {
             HVACMode.OFF: self._data_handler.set_power_off,
             HVACMode.COOL: self._data_handler.set_cooling_mode,
             HVACMode.HEAT: self._data_handler.set_heating_mode,
+            HVACMode.AUTO: self._data_handler.set_auto_mode,
         }
         action = hvac_mode_actions.get(hvac_mode)
         if action:
-            success = await action()
-            if success:
-                _LOGGER.info("HVAC mode set to %s successfully.", hvac_mode)
-                asyncio.create_task(self.coordinator.async_request_refresh())
+            await action()
+            await self.coordinator.async_request_refresh()
 
     async def async_set_preset_mode(self, preset_mode):
-        _LOGGER.info("Setting preset mode to %s", preset_mode)
         preset_mode_to_power_mode = {
             "Silent": 0,
             "Smart": 1,
@@ -103,10 +115,8 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         }
         power_mode = preset_mode_to_power_mode.get(preset_mode)
         if power_mode is not None:
-            success = await self._data_handler.set_power_mode(power_mode)
-            if success:
-                _LOGGER.info("Preset mode set to %s successfully.", preset_mode)
-                asyncio.create_task(self.coordinator.async_request_refresh())
+            await self._data_handler.set_power_mode(power_mode)
+            await self.coordinator.async_request_refresh()
 
     @property
     def temperature_unit(self):
@@ -133,27 +143,10 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         return 1
 
     async def async_set_temperature(self, **kwargs):
-        """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
-        if temperature is None:
-            return
-
-        if not self._is_valid_temperature(temperature):
-            return
-
-        _LOGGER.info("Setting target temperature to %s°C", temperature)
-        try:
-            success = await self._data_handler.set_target_temperature(temperature)
-            if success:
-                _LOGGER.info("✅ Target temperature set to %s°C", temperature)
-                asyncio.create_task(self.coordinator.async_request_refresh())
-        except Exception as e:
-            _LOGGER.exception("❌ Exception occurred while setting temperature: %s", e)
-
-    def _is_valid_temperature(self, temperature):
-        """Validate temperature against min and max limits."""
-        return self.min_temp <= temperature <= self.max_temp
+        if temperature is not None:
+            await self._data_handler.set_target_temperature(temperature)
+            await self.coordinator.async_request_refresh()
 
     async def async_update(self):
-        _LOGGER.debug("Updating Alsavo Pro Climate data.")
         self._data_handler = self.coordinator.data_handler
