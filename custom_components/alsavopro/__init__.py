@@ -1,13 +1,15 @@
 """Alsavo Pro pool heat pump integration."""
+
 import logging
 from datetime import timedelta
-
 import async_timeout
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
-
 from homeassistant.const import (
     CONF_PASSWORD,
     CONF_IP_ADDRESS,
@@ -16,22 +18,21 @@ from homeassistant.const import (
 )
 
 from .AlsavoPyCtrl import AlsavoPro
-from .const import (
-    DOMAIN,
-    SERIAL_NO,
-)
+from .const import DOMAIN, SERIAL_NO
 
 _LOGGER = logging.getLogger(__name__)
 
+PLATFORMS = ["climate", "sensor"]
 
-async def async_setup(hass, config):
-    """Perform setup for the Alsavo Pro integration."""
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Legacy setup (not used with config entries)."""
     _LOGGER.debug("async_setup called for Alsavo Pro integration.")
     return True
 
 
-async def async_setup_entry(hass, entry):
-    """Set up the Alsavo Pro heater from a config entry."""
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Alsavo Pro from a config entry."""
     _LOGGER.info("Setting up Alsavo Pro heater: %s", entry.data.get(CONF_NAME))
 
     try:
@@ -41,41 +42,35 @@ async def async_setup_entry(hass, entry):
         port_no = entry.data[CONF_PORT]
         password = entry.data[CONF_PASSWORD]
 
-        # Initialize the data handler
-        data_handler = AlsavoPro(name, serial_no, ip_address, port_no, password)
-        await data_handler.update()
-        _LOGGER.debug("Initial data fetched for Alsavo Pro: %s", name)
+        # Initialize and fetch initial data
+        device = AlsavoPro(name, serial_no, ip_address, port_no, password)
+        await device.update()
 
-        # Create and store the data coordinator
-        data_coordinator = AlsavoProDataCoordinator(hass, data_handler)
-        if DOMAIN not in hass.data:
-            hass.data[DOMAIN] = {}
-        hass.data[DOMAIN][entry.entry_id] = data_coordinator
+        coordinator = AlsavoProDataCoordinator(hass, device)
+        await coordinator.async_config_entry_first_refresh()
 
-        # Forward entries to sensor and climate platforms
-        await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "climate"])
-        _LOGGER.info("Alsavo Pro heater setup complete for %s", name)
+        # Store coordinator
+        hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
+        # Setup platforms
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+        _LOGGER.info("Alsavo Pro setup complete for %s", name)
         return True
+
     except Exception as ex:
-        _LOGGER.error("Error setting up Alsavo Pro heater: %s", ex)
+        _LOGGER.exception("Error setting up Alsavo Pro heater: %s", ex)
         return False
 
 
-async def async_unload_entry(hass, config_entry):
-    """Unload a config entry."""
-    _LOGGER.info("Unloading Alsavo Pro heater: %s", config_entry.data.get(CONF_NAME))
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload Alsavo Pro config entry."""
+    _LOGGER.info("Unloading Alsavo Pro heater: %s", entry.data.get(CONF_NAME))
 
-    unload_ok = True
-    unload_ok &= await hass.config_entries.async_forward_entry_unload(
-        config_entry, "climate"
-    )
-    unload_ok &= await hass.config_entries.async_forward_entry_unload(
-        config_entry, "sensor"
-    )
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
-        hass.data[DOMAIN].pop(config_entry.entry_id, None)
+        hass.data[DOMAIN].pop(entry.entry_id, None)
         _LOGGER.info("Alsavo Pro heater unloaded successfully.")
     else:
         _LOGGER.warning("Failed to unload Alsavo Pro heater.")
@@ -84,26 +79,26 @@ async def async_unload_entry(hass, config_entry):
 
 
 class AlsavoProDataCoordinator(DataUpdateCoordinator):
-    """Custom DataUpdateCoordinator for Alsavo Pro."""
+    """Coordinator to manage Alsavo Pro data fetching."""
 
-    def __init__(self, hass, data_handler):
-        """Initialize the Alsavo Pro Data Coordinator."""
+    def __init__(self, hass: HomeAssistant, device: AlsavoPro) -> None:
+        """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
-            name="AlsavoPro",
+            name="AlsavoProDataCoordinator",
             update_interval=timedelta(seconds=15),
         )
-        self.data_handler = data_handler
+        self.device = device
 
     async def _async_update_data(self):
-        """Fetch updated data from the Alsavo Pro device."""
-        _LOGGER.debug("Fetching updated data from Alsavo Pro device.")
+        """Fetch data from Alsavo Pro device."""
+        _LOGGER.debug("Updating Alsavo Pro device data.")
         try:
             async with async_timeout.timeout(10):
-                await self.data_handler.update()
-                _LOGGER.debug("Successfully updated data for Alsavo Pro.")
-                return self.data_handler
+                await self.device.update()
+                _LOGGER.debug("Data update successful.")
+                return self.device
         except Exception as ex:
-            _LOGGER.error("Error fetching data from Alsavo Pro device: %s", ex)
-            raise UpdateFailed("Failed to update Alsavo Pro data.") from ex
+            _LOGGER.exception("Error updating Alsavo Pro data: %s", ex)
+            raise UpdateFailed("Failed to update Alsavo Pro data") from ex
