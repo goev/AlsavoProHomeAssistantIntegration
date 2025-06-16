@@ -57,7 +57,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         return (
             HVACMode.OFF
             if not self._data_handler.is_power_on
-            else operating_mode_map.get(self._data_handler.operating_mode)
+            else operating_mode_map.get(self._data_handler.operating_mode, HVACMode.OFF)
         )
 
     @property
@@ -114,11 +114,13 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def min_temp(self):
-        return self._data_handler.get_temperature_from_status(56)
+        temp = self._data_handler.get_temperature_from_status(56)
+        return temp if isinstance(temp, (int, float)) else 10  # fallback default
 
     @property
     def max_temp(self):
-        return self._data_handler.get_temperature_from_status(55)
+        temp = self._data_handler.get_temperature_from_status(55)
+        return temp if isinstance(temp, (int, float)) else 45  # fallback default
 
     @property
     def current_temperature(self):
@@ -139,6 +141,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             return
 
         if not self._is_valid_temperature(temperature):
+            _LOGGER.warning("Invalid temperature setpoint: %s", temperature)
             return
 
         _LOGGER.info("Setting target temperature to %s°C", temperature)
@@ -153,6 +156,24 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     def _is_valid_temperature(self, temperature):
         """Validate temperature against min and max limits."""
         return self.min_temp <= temperature <= self.max_temp
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.unique_id)},
+            "name": self.name,
+            "manufacturer": "Alsavo",
+            "model": "Pro Heat Pump",
+        }
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "power_mode": self.preset_mode,
+            "inlet_temperature": self._data_handler.water_in_temperature,
+            "outlet_temperature": self._data_handler.water_out_temperature,
+            "target_temperature": self.target_temperature,
+        }
 
     async def async_update(self):
         _LOGGER.debug("Updating Alsavo Pro Climate data.")
