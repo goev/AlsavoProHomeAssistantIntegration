@@ -3,7 +3,7 @@ from homeassistant.components.sensor import (
     SensorDeviceClass
 )
 
-from . import AlsavoProDataCoordinator
+from . import AlsavoProDataCoordinator, AlsavoProEntity
 from .const import (
     DOMAIN
 )
@@ -214,7 +214,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
     )
 
 
-class AlsavoProSensor(CoordinatorEntity, SensorEntity):
+class AlsavoProSensor(AlsavoProEntity, CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator: AlsavoProDataCoordinator,
                  device_class: SensorDeviceClass,
                  name: str,
@@ -268,7 +268,7 @@ class AlsavoProSensor(CoordinatorEntity, SensorEntity):
         return self._icon
 
 
-class AlsavoProErrorSensor(CoordinatorEntity, SensorEntity):
+class AlsavoProErrorSensor(AlsavoProEntity, CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator: AlsavoProDataCoordinator,
                  name: str):
         super().__init__(coordinator)

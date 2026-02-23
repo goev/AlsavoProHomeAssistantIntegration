@@ -3,6 +3,7 @@ import logging
 from datetime import timedelta
 
 import async_timeout
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
@@ -80,3 +81,17 @@ class AlsavoProDataCoordinator(DataUpdateCoordinator):
                 return self.data_handler
         except Exception as ex:
             _LOGGER.debug("_async_update_data timed out")
+
+
+class AlsavoProEntity:
+    """Mixin providing device_info for Alsavo Pro entities."""
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._data_handler.serial_no)},
+            name=self._data_handler.name,
+            manufacturer="Alsavo",
+            model="Pro",
+        )

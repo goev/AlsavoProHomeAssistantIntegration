@@ -164,6 +164,10 @@ class AlsavoPro:
     def name(self):
         return self._name
 
+    @property
+    def serial_no(self):
+        return self._serial_no
+
 
 class PacketHeader:
     """ This is the packet header """
