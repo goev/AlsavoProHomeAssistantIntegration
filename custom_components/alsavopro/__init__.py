@@ -92,8 +92,8 @@ class AlsavoProEntity:
         return DeviceInfo(
             identifiers={(DOMAIN, self._data_handler.serial_no)},
             name=self._data_handler.name,
-            manufacturer="Alsavo",
-            model="Pro",
+            manufacturer="Alsavo/Zealux",
+            model="Swim&Fun 1401/1402",
             serial_number=str(self._data_handler.serial_no),
             hw_version=str(self._data_handler.get_status_value(65)),
             sw_version=str(self._data_handler.get_status_value(66)),
