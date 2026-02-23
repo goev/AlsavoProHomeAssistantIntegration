@@ -94,4 +94,7 @@ class AlsavoProEntity:
             name=self._data_handler.name,
             manufacturer="Alsavo",
             model="Pro",
+            serial_number=str(self._data_handler.serial_no),
+            hw_version=str(self._data_handler.get_status_value(65)),
+            sw_version=str(self._data_handler.get_status_value(66)),
         )
