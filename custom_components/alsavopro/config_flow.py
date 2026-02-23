@@ -37,13 +37,8 @@ async def validate_input(hass: core.HomeAssistant, name, serial_no, ip_address, 
         raise MissingPasswordValue("The 'password' field is required.")
 
     for entry in hass.config_entries.async_entries(DOMAIN):
-        if any([
-            entry.data[SERIAL_NO] == serial_no,
-            entry.data[CONF_NAME] == name,
-            entry.data[CONF_IP_ADDRESS] == ip_address,
-            entry.data[CONF_PORT] == port_no
-        ]):
-            raise AlreadyConfigured("An entry with the given details already exists.")
+        if entry.data[SERIAL_NO] == serial_no:
+            raise AlreadyConfigured("A device with this serial number already exists.")
 
     # Additional validations (if any) go here...
 
