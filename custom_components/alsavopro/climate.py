@@ -39,6 +39,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 class AlsavoProClimate(AlsavoProEntity, CoordinatorEntity, ClimateEntity):
     """ Climate platform for Alsavo Pro pool heater """
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator: AlsavoProDataCoordinator):
         """Initialize the heater."""
@@ -60,7 +61,7 @@ class AlsavoProClimate(AlsavoProEntity, CoordinatorEntity, ClimateEntity):
     @property
     def name(self):
         """Return the name of the device, if any."""
-        return self._name
+        return None
 
     @property
     def available(self) -> bool:

@@ -225,6 +225,8 @@ async def async_setup_entry(hass, entry, async_add_devices):
 
 
 class AlsavoProSensor(AlsavoProEntity, CoordinatorEntity, SensorEntity):
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator: AlsavoProDataCoordinator,
                  device_class: SensorDeviceClass,
                  name: str,
@@ -247,7 +249,7 @@ class AlsavoProSensor(AlsavoProEntity, CoordinatorEntity, SensorEntity):
     @property
     def name(self):
         """Return the name of the sensor."""
-        return f"{DOMAIN}_{self._data_handler.name}_{self._name}"
+        return self._name
 
     # This property is important to let HA know if this entity is online or not.
     # If an entity is offline (return False), the UI will reflect this.
@@ -281,6 +283,8 @@ class AlsavoProSensor(AlsavoProEntity, CoordinatorEntity, SensorEntity):
 
 
 class AlsavoProErrorSensor(AlsavoProEntity, CoordinatorEntity, SensorEntity):
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator: AlsavoProDataCoordinator,
                  name: str):
         super().__init__(coordinator)
@@ -293,7 +297,7 @@ class AlsavoProErrorSensor(AlsavoProEntity, CoordinatorEntity, SensorEntity):
     @property
     def name(self):
         """Return the name of the sensor."""
-        return f"{DOMAIN}_{self._data_handler.name}_{self._name}"
+        return self._name
 
     @property
     def unique_id(self):
