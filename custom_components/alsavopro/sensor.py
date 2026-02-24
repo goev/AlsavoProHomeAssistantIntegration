@@ -89,7 +89,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
                             "Hz",
                             27,
                             False,
-                            "mdi:air-conditioner"),
+                            "mdi:sin-wave"),
             AlsavoProSensor(coordinator,
                             SensorDeviceClass.TEMPERATURE,
                             "Heating mode target",
