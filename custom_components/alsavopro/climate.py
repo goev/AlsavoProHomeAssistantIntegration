@@ -14,7 +14,7 @@ from homeassistant.const import (
     CONF_IP_ADDRESS,
     CONF_PORT,
     CONF_NAME,
-    PRECISION_TENTHS,
+    PRECISION_WHOLE,
     UnitOfTemperature,
 )
 
@@ -163,7 +163,7 @@ class AlsavoProClimate(AlsavoProEntity, CoordinatorEntity, ClimateEntity):
     @property
     def target_temperature_step(self):
         """Return the supported step of target temperature."""
-        return PRECISION_TENTHS
+        return PRECISION_WHOLE
 
     async def async_set_temperature(self, **kwargs):
         """Set new target temperature."""
