@@ -73,6 +73,7 @@ class AlsavoProFrostProtectionSensor(AlsavoProEntity, CoordinatorEntity, BinaryS
 class AlsavoProAlarmSensor(AlsavoProEntity, CoordinatorEntity, BinarySensorEntity):
     _attr_has_entity_name = True
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: AlsavoProDataCoordinator):
         super().__init__(coordinator)
