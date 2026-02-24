@@ -137,6 +137,10 @@ class AlsavoPro:
         return self._data.get_config_value(5) & 1 == 1
 
     @property
+    def is_frost_protection(self):
+        return self.get_status_value(49) & 64 == 64
+
+    @property
     def errors(self):
         error = ""
         if self.get_status_value(48) & 0x4 == 0x4:
