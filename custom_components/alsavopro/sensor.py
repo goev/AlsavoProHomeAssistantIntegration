@@ -72,7 +72,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
             AlsavoProSensor(coordinator,
                             None,
                             "Exhaust valve opening",
-                            "%",
+                            None,
                             25,
                             False,
                             "mdi:valve"),
