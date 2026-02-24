@@ -15,6 +15,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
     async_add_devices([
         AlsavoProConnectivitySensor(coordinator),
         AlsavoProFrostProtectionSensor(coordinator),
+        AlsavoProAlarmSensor(coordinator),
     ])
 
 
@@ -67,3 +68,33 @@ class AlsavoProFrostProtectionSensor(AlsavoProEntity, CoordinatorEntity, BinaryS
     def is_on(self) -> bool:
         """Return True if frost protection is active (AlarmCode2 bit 64)."""
         return self._data_handler.is_frost_protection
+
+
+class AlsavoProAlarmSensor(AlsavoProEntity, CoordinatorEntity, BinarySensorEntity):
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
+    def __init__(self, coordinator: AlsavoProDataCoordinator):
+        super().__init__(coordinator)
+        self.data_coordinator = coordinator
+        self._data_handler = self.data_coordinator.data_handler
+
+    @property
+    def name(self):
+        """Return the name of the sensor."""
+        return "Alarm"
+
+    @property
+    def unique_id(self):
+        """Return a unique ID."""
+        return f"{self._data_handler.unique_id}_alarm"
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if there is an active error message."""
+        return bool(self._data_handler.errors)
+
+    @property
+    def extra_state_attributes(self):
+        """Return the error message as an attribute."""
+        return {"error_message": self._data_handler.errors}
