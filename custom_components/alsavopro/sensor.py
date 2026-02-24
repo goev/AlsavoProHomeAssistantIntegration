@@ -61,7 +61,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
                             "°C",
                             21,
                             False,
-                            "mdi:thermometer"),
+                            "mdi:chip"),
             AlsavoProSensor(coordinator,
                             SensorDeviceClass.TEMPERATURE,
                             "Exhaust temperature",
