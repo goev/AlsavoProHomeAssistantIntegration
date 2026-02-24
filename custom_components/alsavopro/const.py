@@ -3,6 +3,13 @@
 SERIAL_NO = "serial_no"
 DOMAIN = "alsavopro"
 
+CONNECTION_TYPE = "connection_type"
+CONNECTION_TYPE_CLOUD = "cloud"
+CONNECTION_TYPE_LOCAL = "local"
+CLOUD_IP = "47.254.157.150"
+CLOUD_PORT = "51192"
+DEFAULT_LOCAL_PORT = "1194"
+
 POWER_MODE_MAP = {
     0: 'Silent',
     1: 'Smart',
