@@ -44,7 +44,7 @@ async def async_setup_entry(hass, entry):
         hass.data[DOMAIN] = {}
     hass.data[DOMAIN][entry.entry_id] = data_coordinator
 
-    await hass.config_entries.async_forward_entry_setups(entry, ['binary_sensor', 'sensor', 'climate'])
+    await hass.config_entries.async_forward_entry_setups(entry, ['binary_sensor', 'sensor', 'climate', 'number'])
 
     return True
 
@@ -59,6 +59,9 @@ async def async_unload_entry(hass, config_entry):
     )
     unload_ok |= await hass.config_entries.async_forward_entry_unload(
         config_entry, "sensor"
+    )
+    unload_ok |= await hass.config_entries.async_forward_entry_unload(
+        config_entry, "number"
     )
     return unload_ok
 
