@@ -1,6 +1,7 @@
 from homeassistant.components.number import (
     NumberEntity,
-    NumberDeviceClass
+    NumberDeviceClass,
+    NumberMode
 )
 from homeassistant.const import EntityCategory
 
@@ -22,8 +23,8 @@ async def async_setup_entry(hass, entry, async_add_devices):
                             "Water temperature calibration",
                             "°C",
                             11,
-                            -10.0,
-                            10.0,
+                            -9.9,
+                            9.9,
                             0.1,
                             "mdi:thermometer-lines"),
         ]
@@ -51,6 +52,7 @@ class AlsavoProNumber(AlsavoProEntity, CoordinatorEntity, NumberEntity):
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
         self._attr_native_step = step
+        self._attr_mode = NumberMode.BOX
         self._attr_device_class = NumberDeviceClass.TEMPERATURE
         self._attr_entity_category = EntityCategory.CONFIG
 
