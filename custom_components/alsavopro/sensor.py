@@ -1,6 +1,7 @@
 from homeassistant.components.sensor import (
     SensorEntity,
-    SensorDeviceClass
+    SensorDeviceClass,
+    SensorStateClass
 )
 from homeassistant.const import EntityCategory
 
@@ -75,7 +76,9 @@ async def async_setup_entry(hass, entry, async_add_devices):
                             None,
                             25,
                             False,
-                            "mdi:valve"),
+                            "mdi:valve",
+                            None,
+                            SensorStateClass.MEASUREMENT),
             AlsavoProSensor(coordinator,
                             None,
                             "Fan speed",
@@ -245,7 +248,8 @@ class AlsavoProSensor(AlsavoProEntity, CoordinatorEntity, SensorEntity):
                  idx: int,
                  from_config: bool,
                  icon: str,
-                 entity_category: EntityCategory = None):
+                 entity_category: EntityCategory = None,
+                 state_class: SensorStateClass = None):
         super().__init__(coordinator)
         self.data_coordinator = coordinator
         self._data_handler = self.data_coordinator.data_handler
@@ -256,6 +260,7 @@ class AlsavoProSensor(AlsavoProEntity, CoordinatorEntity, SensorEntity):
         self._config = from_config
         self._icon = icon
         self._attr_entity_category = entity_category
+        self._attr_state_class = state_class
 
     @property
     def name(self):
