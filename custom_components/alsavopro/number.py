@@ -23,9 +23,9 @@ async def async_setup_entry(hass, entry, async_add_devices):
                             "Water temperature calibration",
                             "°C",
                             11,
-                            -10.0,
-                            10.0,
-                            0.5,
+                            -9.9,
+                            9.9,
+                            0.1,
                             "mdi:thermometer-lines"),
         ]
     )
