@@ -18,12 +18,21 @@ Restart Home Assistant and go to *Devices and Services* and press *+Add integrat
 Search for *AlsavoPro* and add it.
 
 ## Configuration
-You must now choose a name for the device. The serial number for the heat pump can be found in the Alsavo Pro app by logging in to the heat pump and pressing the Alsavo Pro-logo in the upper right corner.
-Password is the same as the one you logged into the Alsavo Pro app with.
+When adding the integration, you will be asked to choose a connection type:
 
-Ip-address and port can be one of two:
-- If you want to use the cloud, set IP-address to 47.254.157.150 and port to 51192.
-- If you want to bypass the cloud, enter the heat pumps ip-address and use port 1194.
+### Cloud Connection
+Connect via the Alsavo cloud server. You will need:
+- **Device name**: Choose a name for the device
+- **Serial number**: Found in the Alsavo Pro app by logging in to the heat pump and pressing the Alsavo Pro logo in the upper right corner
+- **Password**: The same password you use to log into the Alsavo Pro app
+
+### Local Connection
+Connect directly to your heat pump on the local network. You will need:
+- **Device name**: Choose a name for the device
+- **Serial number**: Found in the Alsavo Pro app (see above)
+- **IP-address**: The local IP address of your heat pump
+- **Port**: Use 1194 for local connections
+- **Password**: The same password you use to log into the Alsavo Pro app
 
 ## AlsavoCtrl
 This code is very much based on AlsavoCtrl: https://github.com/strandborg/AlsavoCtrl
