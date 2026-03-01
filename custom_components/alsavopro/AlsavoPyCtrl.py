@@ -34,11 +34,12 @@ class AlsavoPro:
             data = await self._session.query_all()
             if data is not None:
                 self._data = data
+                self._online = True
+                self._update_retries = 0
         except Exception as e:
             if self._update_retries < MAX_UPDATE_RETRIES:
                 self._update_retries += 1
                 await self.update()
-                self._online = True
             else:
                 self._update_retries = 0
                 _LOGGER.error(f"Unable to update: {e}")
@@ -49,11 +50,12 @@ class AlsavoPro:
         try:
             await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
             await self._session.set_config(idx, value)
+            self._online = True
+            self._set_retries = 0
         except Exception as e:
             if self._set_retries < MAX_SET_CONFIG_RETRIES:
                 self._set_retries += 1
                 await self.set_config(idx, value)
-                self._online = True
             else:
                 self._set_retries = 0
                 _LOGGER.error(f"Unable to set config: {idx}, {value} Error: {e}")
@@ -61,7 +63,7 @@ class AlsavoPro:
 
     @property
     def is_online(self) -> bool:
-        return self._data.parts > 0
+        return self._online and self._data.parts > 0
 
     @property
     def unique_id(self):
