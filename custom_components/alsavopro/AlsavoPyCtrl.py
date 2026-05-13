@@ -41,6 +41,8 @@ class AlsavoPro:
                 _LOGGER.warning(f"Update attempt {attempt + 1} failed: {e}")
                 if attempt + 1 < MAX_UPDATE_RETRIES:
                     await asyncio.sleep(2)
+            finally:
+                self._session.close()
         _LOGGER.error("Unable to update after max retries")
         self._online = False
 
@@ -56,6 +58,8 @@ class AlsavoPro:
                 _LOGGER.warning(f"Set config attempt {attempt + 1} failed: {e}")
                 if attempt + 1 < MAX_SET_CONFIG_RETRIES:
                     await asyncio.sleep(2)
+            finally:
+                self._session.close()
         _LOGGER.error(f"Unable to set config: {idx}, {value} after max retries")
         self._online = False
 
@@ -452,6 +456,11 @@ class AlsavoSocketCom:
         val_l = (value & 0xff).to_bytes(1, 'big')
         await self.send_packet(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04' + idx_h + idx_l + val_h + val_l)
 
+    def close(self):
+        if self.client is not None:
+            self.client.close()
+            self.client = None
+
     async def connect(self, server_ip, server_port, serial, password):
         _LOGGER.debug("Connecting to Alsavo Pro")
 
@@ -459,6 +468,7 @@ class AlsavoSocketCom:
         self.serialQ = serial
         self.password = password
         self.client = UDPClient(server_ip, server_port)
+        await self.client.open()
 
         _LOGGER.debug("Asking for auth challenge")
         auth_challenge = await self.get_auth_challenge()
