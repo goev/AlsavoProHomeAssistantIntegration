@@ -8,10 +8,6 @@ from homeassistant.components.climate import (
 
 from homeassistant.const import (
     ATTR_TEMPERATURE,
-    CONF_PASSWORD,
-    CONF_IP_ADDRESS,
-    CONF_PORT,
-    CONF_NAME,
     UnitOfTemperature,
 )
 

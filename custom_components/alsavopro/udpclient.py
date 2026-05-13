@@ -8,7 +8,6 @@ class UDPClient:
     def __init__(self, server_host, server_port):
         self.server_host = server_host
         self.server_port = server_port
-        self.loop = asyncio.get_event_loop()
 
     class SimpleClientProtocol(asyncio.DatagramProtocol):
         # Sending only
@@ -44,8 +43,9 @@ class UDPClient:
                 self.future.set_exception(ConnectionError("Connection lost"))
 
     async def send_rcv(self, bytes_to_send):
-        future = self.loop.create_future()
-        transport, protocol = await self.loop.create_datagram_endpoint(
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        transport, protocol = await loop.create_datagram_endpoint(
             lambda: self.EchoClientProtocol(bytes_to_send, future),
             remote_addr=(self.server_host, self.server_port)
         )
@@ -60,7 +60,8 @@ class UDPClient:
             transport.close()
 
     async def send(self, bytes_to_send):
-        transport, protocol = await self.loop.create_datagram_endpoint(
+        loop = asyncio.get_running_loop()
+        transport, protocol = await loop.create_datagram_endpoint(
             lambda: self.SimpleClientProtocol(bytes_to_send),
             remote_addr=(self.server_host, self.server_port)
         )

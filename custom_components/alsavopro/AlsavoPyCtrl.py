@@ -5,7 +5,7 @@ import random
 import struct
 from datetime import datetime, timezone
 from enum import Enum
-from custom_components.alsavopro.const import MODE_TO_CONFIG, ALARM_REGISTER_48, ALARM_REGISTER_49, ALARM_REGISTER_50, MAX_UPDATE_RETRIES, MAX_SET_CONFIG_RETRIES
+from .const import MODE_TO_CONFIG, ALARM_REGISTER_48, ALARM_REGISTER_49, ALARM_REGISTER_50, MAX_UPDATE_RETRIES, MAX_SET_CONFIG_RETRIES
 from .udpclient import UDPClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -401,13 +401,13 @@ class AlsavoSocketCom:
         self.client = None
 
     async def send_and_receive(self, bytes_to_send):
-        _LOGGER.debug(f"send_and_receive())")
+        _LOGGER.debug("send_and_receive()")
         response = await self.client.send_rcv(bytes_to_send)
-        _LOGGER.debug(f"Received response")
+        _LOGGER.debug("Received response")
         return response
 
     async def send(self, bytes_to_send):
-        _LOGGER.debug(f"send())")
+        _LOGGER.debug("send()")
         await self.client.send(bytes_to_send)
 
     async def get_auth_challenge(self):
