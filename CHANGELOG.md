@@ -1,11 +1,5 @@
 # Changelog
 
-## [1.0.6] - 2026-05-13
-
-### Fixed
-- Aligned auth challenge-response MD5 hash with the reference C++ implementation: token bytes are now packed little-endian (matching native x86 byte order used by the pump server)
-- Expanded `clientToken` entropy from 16-bit to full 32-bit random value, matching the reference implementation
-
 ## [1.0.5] - 2026-05-13
 
 ### Fixed
