@@ -3,59 +3,66 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-
 class UDPClient:
-    """Async UDP client that reuses one socket for the full session."""
-
+    """ Async UDP client """
     def __init__(self, server_host, server_port):
         self.server_host = server_host
         self.server_port = server_port
-        self._transport = None
-        self._protocol = None
 
-    class _Protocol(asyncio.DatagramProtocol):
-        def __init__(self):
-            self._pending: asyncio.Future | None = None
+    class SimpleClientProtocol(asyncio.DatagramProtocol):
+        # Sending only
+        def __init__(self, message):
+            self.message = message
+            self.transport = None
+
+        def connection_made(self, transport):
+            self.transport = transport
+            self.transport.sendto(self.message)
+            self.transport.close()
+
+    class EchoClientProtocol(asyncio.DatagramProtocol):
+        # Send and receive
+        def __init__(self, message, future):
+            self.message = message
+            self.future = future
+            self.transport = None
+
+        def connection_made(self, transport):
+            self.transport = transport
+            self.transport.sendto(self.message)
 
         def datagram_received(self, data, addr):
-            if self._pending is not None and not self._pending.done():
-                self._pending.set_result(data)
+            self.future.set_result(data)
+            self.transport.close()
 
         def error_received(self, exc):
-            if self._pending is not None and not self._pending.done():
-                self._pending.set_exception(exc)
+            self.future.set_exception(exc)
 
         def connection_lost(self, exc):
-            if self._pending is not None and not self._pending.done():
-                self._pending.set_exception(ConnectionError("Connection lost"))
-
-    async def open(self):
-        """Open the UDP socket (call once per session)."""
-        loop = asyncio.get_running_loop()
-        self._protocol = self._Protocol()
-        self._transport, _ = await loop.create_datagram_endpoint(
-            lambda: self._protocol,
-            remote_addr=(self.server_host, self.server_port),
-        )
-
-    def close(self):
-        """Close the UDP socket."""
-        if self._transport is not None:
-            self._transport.close()
-            self._transport = None
+            if not self.future.done():
+                self.future.set_exception(ConnectionError("Connection lost"))
 
     async def send_rcv(self, bytes_to_send):
-        """Send bytes and wait for a response on the same socket."""
         loop = asyncio.get_running_loop()
-        self._protocol._pending = loop.create_future()
-        self._transport.sendto(bytes_to_send)
+        future = loop.create_future()
+        transport, protocol = await loop.create_datagram_endpoint(
+            lambda: self.EchoClientProtocol(bytes_to_send, future),
+            remote_addr=(self.server_host, self.server_port)
+        )
+
         try:
-            data = await asyncio.wait_for(self._protocol._pending, timeout=10.0)
+            data = await asyncio.wait_for(future, timeout=5.0)
             return data, b'0'
         except asyncio.TimeoutError:
-            _LOGGER.error("Timeout: No response from server in 10 seconds.")
+            _LOGGER.error("Timeout: No response from server in 5 seconds.")
             return None
+        finally:
+            transport.close()
 
     async def send(self, bytes_to_send):
-        """Send bytes without waiting for a response."""
-        self._transport.sendto(bytes_to_send)
+        loop = asyncio.get_running_loop()
+        transport, protocol = await loop.create_datagram_endpoint(
+            lambda: self.SimpleClientProtocol(bytes_to_send),
+            remote_addr=(self.server_host, self.server_port)
+        )
+        transport.close()

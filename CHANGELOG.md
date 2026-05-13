@@ -1,12 +1,5 @@
 # Changelog
 
-## [1.0.6] - 2026-05-13
-
-### Fixed
-- Fixed authentication failure ("Server not responding to auth response") caused by UDP socket being recreated for each packet, resulting in a changing source port. The pump replied to the original port which was already closed. `UDPClient` now opens one socket per session and reuses it for all exchanges
-- Increased UDP response timeout from 5 s to 10 s
-- Increased coordinator overall timeout from 10 s to 45 s, allowing up to ~3 real retry attempts instead of the previous ~1
-
 ## [1.0.5] - 2026-05-13
 
 ### Fixed
