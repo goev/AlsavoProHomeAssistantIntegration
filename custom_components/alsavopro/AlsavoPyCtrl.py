@@ -455,7 +455,7 @@ class AlsavoSocketCom:
     async def connect(self, server_ip, server_port, serial, password):
         _LOGGER.debug("Connecting to Alsavo Pro")
 
-        self.clientToken = random.randint(0, 65535)
+        self.clientToken = random.randint(0, 0xFFFFFFFF)
         self.serialQ = serial
         self.password = password
         self.client = UDPClient(server_ip, server_port)
@@ -473,8 +473,8 @@ class AlsavoSocketCom:
         _LOGGER.debug(f"Received handshake, CSID={hex(self.CSID)}, DSID={hex(self.DSIS)}, "f"server token {hex(self.serverToken)}")
 
         ctx = hashlib.md5()
-        ctx.update(self.clientToken.to_bytes(4, "big"))
-        ctx.update(self.serverToken.to_bytes(4, "big"))
+        ctx.update(self.clientToken.to_bytes(4, "little"))
+        ctx.update(self.serverToken.to_bytes(4, "little"))
         ctx.update(md5_hash(self.password))
 
         response = await self.send_auth_response(ctx)
