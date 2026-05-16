@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
+    UpdateFailed,
 )
 
 from homeassistant.const import (
@@ -55,24 +56,36 @@ async def async_unload_entry(hass, config_entry):
     )
 
 
+OFFLINE_TOLERANCE = 5  # consecutive failures before reporting unavailable
+
+
 class AlsavoProDataCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, data_handler):
         """Initialize my coordinator."""
         super().__init__(
             hass,
             _LOGGER,
-            # Name of the data. For logging purposes.
             name="AlsavoPro",
-            # Polling interval. Will only be polled if there are subscribers.
-            update_interval=timedelta(seconds=15),
+            update_interval=timedelta(seconds=60),
         )
         self.data_handler = data_handler
+        self._consecutive_failures = 0
 
     async def _async_update_data(self):
         _LOGGER.debug("_async_update_data")
         try:
             async with asyncio.timeout(10):
                 await self.data_handler.update()
+                self._consecutive_failures = 0
                 return self.data_handler
-        except Exception:
-            _LOGGER.debug("_async_update_data timed out")
+        except Exception as err:
+            self._consecutive_failures += 1
+            if self._consecutive_failures < OFFLINE_TOLERANCE:
+                _LOGGER.debug(
+                    "Alsavo Pro unreachable (attempt %d/%d): %s",
+                    self._consecutive_failures,
+                    OFFLINE_TOLERANCE,
+                    err,
+                )
+                return self.data_handler
+            raise UpdateFailed(f"Alsavo Pro unreachable after {OFFLINE_TOLERANCE} attempts: {err}") from err
