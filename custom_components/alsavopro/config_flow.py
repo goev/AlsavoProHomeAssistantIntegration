@@ -14,8 +14,6 @@ from .const import (
     DOMAIN
 )
 
-# _LOGGER = logging.getLogger(__name__)
-
 DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME): str,
@@ -30,7 +28,6 @@ DATA_SCHEMA = vol.Schema(
 async def validate_input(hass: core.HomeAssistant, name, serial_no, ip_address, port_no, password):
     """Validate the user input allows us to connect."""
 
-    # Pre-validation for missing mandatory fields
     if not name:
         raise MissingNameValue("The 'name' field is required.")
     if not password:
@@ -45,14 +42,11 @@ async def validate_input(hass: core.HomeAssistant, name, serial_no, ip_address, 
         ]):
             raise AlreadyConfigured("An entry with the given details already exists.")
 
-    # Additional validations (if any) go here...
 
-
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Handle a config flow for Alsavo Pro pool heater integration."""
 
     VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
@@ -85,12 +79,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "connection_error"
             except MissingNameValue:
                 errors["base"] = "missing_name"
+            except MissingPasswordValue:
+                errors["base"] = "missing_password"
 
         return self.async_show_form(
             step_id="user",
             data_schema=DATA_SCHEMA,
             errors=errors,
         )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        return OptionsFlowHandler()
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
@@ -101,11 +102,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(CONF_PASSWORD): str,
             }),
         )
-
-
-@callback
-def async_get_options_flow(config_entry):
-    return OptionsFlowHandler(config_entry)
 
 
 class CannotConnect(exceptions.HomeAssistantError):
@@ -121,4 +117,4 @@ class MissingNameValue(exceptions.HomeAssistantError):
 
 
 class MissingPasswordValue(exceptions.HomeAssistantError):
-    """Error to indicate name is missing."""
+    """Error to indicate password is missing."""

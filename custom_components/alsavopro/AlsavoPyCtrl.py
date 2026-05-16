@@ -1,11 +1,11 @@
+import asyncio
 import hashlib
 import logging
 import random
 import struct
 from datetime import datetime, timezone
 from enum import Enum
-from custom_components.alsavopro.const import MODE_TO_CONFIG, NO_WATER_FLUX, WATER_TEMP_TOO_LOW, MAX_UPDATE_RETRIES, \
-     MAX_SET_CONFIG_RETRIES
+from .const import MODE_TO_CONFIG, ALARM_REGISTER_48, ALARM_REGISTER_49, ALARM_REGISTER_50, MAX_UPDATE_RETRIES, MAX_SET_CONFIG_RETRIES
 from .udpclient import UDPClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,40 +28,40 @@ class AlsavoPro:
         self._online = False
 
     async def update(self):
-        _LOGGER.debug(f"update")
-        try:
-            await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
-            data = await self._session.query_all()
-            if data is not None:
-                self._data = data
-        except Exception as e:
-            if self._update_retries < MAX_UPDATE_RETRIES:
-                self._update_retries += 1
-                await self.update()
-                self._online = True
-            else:
-                self._update_retries = 0
-                _LOGGER.error(f"Unable to update: {e}")
-                self._online = False
+        _LOGGER.debug("update")
+        for attempt in range(MAX_UPDATE_RETRIES):
+            try:
+                await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
+                data = await self._session.query_all()
+                if data is not None:
+                    self._data = data
+                    self._online = True
+                    return
+            except Exception as e:
+                _LOGGER.warning(f"Update attempt {attempt + 1} failed: {e}")
+                if attempt + 1 < MAX_UPDATE_RETRIES:
+                    await asyncio.sleep(2)
+        _LOGGER.error("Unable to update after max retries")
+        self._online = False
 
     async def set_config(self, idx: int, value: int):
         _LOGGER.debug(f"set_config({idx}, {value})")
-        try:
-            await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
-            await self._session.set_config(idx, value)
-        except Exception as e:
-            if self._set_retries < MAX_SET_CONFIG_RETRIES:
-                self._set_retries += 1
-                await self.set_config(idx, value)
+        for attempt in range(MAX_SET_CONFIG_RETRIES):
+            try:
+                await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
+                await self._session.set_config(idx, value)
                 self._online = True
-            else:
-                self._set_retries = 0
-                _LOGGER.error(f"Unable to set config: {idx}, {value} Error: {e}")
-                self._online = False
+                return
+            except Exception as e:
+                _LOGGER.warning(f"Set config attempt {attempt + 1} failed: {e}")
+                if attempt + 1 < MAX_SET_CONFIG_RETRIES:
+                    await asyncio.sleep(2)
+        _LOGGER.error(f"Unable to set config: {idx}, {value} after max retries")
+        self._online = False
 
     @property
     def is_online(self) -> bool:
-        return self._data.parts > 0
+        return self._online
 
     @property
     def unique_id(self):
@@ -138,12 +138,13 @@ class AlsavoPro:
 
     @property
     def errors(self):
-        error = ""
-        if self.get_status_value(48) & 0x4 == 0x4:
-            error += NO_WATER_FLUX
-        if self.get_status_value(49) & 0x400 == 0x400:
-            error += WATER_TEMP_TOO_LOW
-        return error
+        errors = []
+        for reg, alarm_map in [(48, ALARM_REGISTER_48), (49, ALARM_REGISTER_49), (50, ALARM_REGISTER_50)]:
+            value = self.get_status_value(reg)
+            for bit, description in alarm_map.items():
+                if value & bit:
+                    errors.append(description)
+        return "\n".join(errors)
 
     async def set_power_off(self):
         await self.set_config(4, self._data.get_config_value(4) & 0xFFDF)
@@ -228,8 +229,7 @@ class AuthIntro:
     def pack(self):
         packed_hdr = self.hdr.pack()
         packed_uuid = struct.pack('!IIII', *self._uuid)
-        packed_data = struct.pack('!BBBBIQ', self.act1, self.act2, self.act3, self.act4, self.clientToken,
-                                  self.pumpSerial) + packed_uuid + self.timestamp.pack()
+        packed_data = struct.pack('!BBBBIQ', self.act1, self.act2, self.act3, self.act4, self.clientToken, self.pumpSerial) + packed_uuid + self.timestamp.pack()
         return packed_hdr + packed_data
 
 
@@ -291,7 +291,7 @@ class Payload:
         self.data = []
 
     def get_value(self, idx):
-        if idx - self.startIdx < 0 or idx - self.startIdx > self.data.__len__():
+        if idx - self.startIdx < 0 or idx - self.startIdx >= self.data.__len__():
             return 0
         return self.data[idx - self.startIdx]
 
@@ -300,6 +300,8 @@ class Payload:
         unpacked_data = struct.unpack('!IHHHH', data[0:12])
         obj = Payload(unpacked_data[0], unpacked_data[1], unpacked_data[2], unpacked_data[3], unpacked_data[4])
         if obj.subType == 1 or obj.subType == 2:
+            if len(data) < 12 + obj.size:
+                raise ValueError(f"Truncated payload: got {len(data)} bytes, need {12 + obj.size}")
             obj.data = struct.unpack('>' + 'H' * (obj.size // 2), data[12:12 + obj.size])
         else:
             obj.startIdx = 0
@@ -399,18 +401,20 @@ class AlsavoSocketCom:
         self.client = None
 
     async def send_and_receive(self, bytes_to_send):
-        _LOGGER.debug(f"send_and_receive())")
+        _LOGGER.debug("send_and_receive()")
         response = await self.client.send_rcv(bytes_to_send)
-        _LOGGER.debug(f"Received response")
+        _LOGGER.debug("Received response")
         return response
 
     async def send(self, bytes_to_send):
-        _LOGGER.debug(f"send())")
+        _LOGGER.debug("send()")
         await self.client.send(bytes_to_send)
 
     async def get_auth_challenge(self):
         auth_intro = AuthIntro(self.clientToken, self.serialQ)
         response = await self.send_and_receive(bytes(auth_intro.pack()))
+        if response is None:
+            raise ConnectionError("No response to auth challenge (timeout)")
         return AuthChallenge.unpack(response[0])
 
     async def send_auth_response(self, ctx):
@@ -466,8 +470,7 @@ class AlsavoSocketCom:
         self.DSIS = auth_challenge.hdr.dsid
         self.serverToken = auth_challenge.serverToken
 
-        _LOGGER.debug(f"Received handshake, CSID={hex(self.CSID)}, DSID={hex(self.DSIS)}, "
-                      f"server token {hex(self.serverToken)}")
+        _LOGGER.debug(f"Received handshake, CSID={hex(self.CSID)}, DSID={hex(self.DSIS)}, "f"server token {hex(self.serverToken)}")
 
         ctx = hashlib.md5()
         ctx.update(self.clientToken.to_bytes(4, "big"))

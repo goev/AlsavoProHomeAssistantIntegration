@@ -1,8 +1,6 @@
-"""Support for Alsavo Pro wifi-enabled pool heaters."""
 import logging
 
 from homeassistant.components.climate import (
-    PLATFORM_SCHEMA,
     ClimateEntity,
     ClimateEntityFeature,
     HVACMode
@@ -10,18 +8,11 @@ from homeassistant.components.climate import (
 
 from homeassistant.const import (
     ATTR_TEMPERATURE,
-    CONF_PASSWORD,
-    CONF_IP_ADDRESS,
-    CONF_PORT,
-    CONF_NAME,
-    PRECISION_TENTHS,
     UnitOfTemperature,
 )
 
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
-    DataUpdateCoordinator,
-    UpdateFailed,
 )
 
 from . import AlsavoProDataCoordinator
@@ -50,7 +41,12 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     @property
     def supported_features(self):
         """Return the list of supported features."""
-        return ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
+        return (
+            ClimateEntityFeature.TARGET_TEMPERATURE
+            | ClimateEntityFeature.PRESET_MODE
+            | ClimateEntityFeature.TURN_ON
+            | ClimateEntityFeature.TURN_OFF
+        )
 
     @property
     def unique_id(self):
@@ -73,13 +69,13 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         operating_mode_map = {
             0: HVACMode.COOL,
             1: HVACMode.HEAT,
-            2: HVACMode.AUTO
+            2: HVACMode.AUTO,
         }
 
         if not self._data_handler.is_power_on:
             return HVACMode.OFF
 
-        return operating_mode_map.get(self._data_handler.operating_mode)
+        return operating_mode_map.get(self._data_handler.operating_mode, HVACMode.OFF)
 
     @property
     def preset_mode(self):
@@ -92,7 +88,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
         hvac_mode_icons = {
             HVACMode.HEAT: "mdi:fire",
             HVACMode.COOL: "mdi:snowflake",
-            HVACMode.AUTO: "mdi:refresh-auto"
+            HVACMode.AUTO: "mdi:autorenew",
         }
 
         return hvac_mode_icons.get(self.hvac_mode, "mdi:hvac-off")
@@ -113,7 +109,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             HVACMode.OFF: self._data_handler.set_power_off,
             HVACMode.COOL: self._data_handler.set_cooling_mode,
             HVACMode.HEAT: self._data_handler.set_heating_mode,
-            HVACMode.AUTO: self._data_handler.set_auto_mode
+            HVACMode.AUTO: self._data_handler.set_auto_mode,
         }
 
         action = hvac_mode_actions.get(hvac_mode)
@@ -124,9 +120,9 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     async def async_set_preset_mode(self, preset_mode):
         """Set hvac preset mode."""
         preset_mode_to_power_mode = {
-            'Silent': 0,     # Silent
-            'Smart': 1,  # Smart
-            'Powerful': 2     # Powerful
+            'Silent': 0,
+            'Smart': 1,
+            'Powerful': 2
         }
 
         power_mode = preset_mode_to_power_mode.get(preset_mode)
@@ -162,7 +158,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     @property
     def target_temperature_step(self):
         """Return the supported step of target temperature."""
-        return PRECISION_TENTHS
+        return 1.0
 
     async def async_set_temperature(self, **kwargs):
         """Set new target temperature."""
