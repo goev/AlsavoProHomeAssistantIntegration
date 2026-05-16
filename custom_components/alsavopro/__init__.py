@@ -50,7 +50,7 @@ async def async_setup_entry(hass, entry):
 
 async def async_unload_entry(hass, config_entry):
     """Unload a config entry."""
-    return await hass.config_entries.async_forward_entry_unloads(
+    return await hass.config_entries.async_forward_entry_unload(
         config_entry, ["climate", "sensor"]
     )
 
