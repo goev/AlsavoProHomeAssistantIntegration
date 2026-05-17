@@ -123,10 +123,12 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     async def async_turn_on(self):
         await self._data_handler.set_power_on()
         await self.coordinator.async_request_refresh()
+        self.coordinator.schedule_followup_refresh()
 
     async def async_turn_off(self):
         await self._data_handler.set_power_off()
         await self.coordinator.async_request_refresh()
+        self.coordinator.schedule_followup_refresh()
 
     async def async_set_hvac_mode(self, hvac_mode):
         hvac_mode_actions = {
@@ -140,6 +142,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             return
         await action()
         await self.coordinator.async_request_refresh()
+        self.coordinator.schedule_followup_refresh()
 
     async def async_set_preset_mode(self, preset_mode):
         power_mode = _PRESET_TO_POWER_MODE.get(preset_mode)
@@ -147,6 +150,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             return
         await self._data_handler.set_power_mode(power_mode)
         await self.coordinator.async_request_refresh()
+        self.coordinator.schedule_followup_refresh()
 
     @property
     def min_temp(self):
@@ -175,3 +179,4 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
             return
         await self._data_handler.set_target_temperature(temperature)
         await self.coordinator.async_request_refresh()
+        self.coordinator.schedule_followup_refresh()

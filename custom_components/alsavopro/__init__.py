@@ -74,6 +74,16 @@ class AlsavoProDataCoordinator(DataUpdateCoordinator):
         )
         self.data_handler = data_handler
         self._consecutive_failures = 0
+        self._followup_cancel = None
+
+    def schedule_followup_refresh(self):
+        """Schedule a single refresh 5 s after a command to read settled state."""
+        if self._followup_cancel is not None:
+            self._followup_cancel()
+        self._followup_cancel = self.hass.loop.call_later(
+            5,
+            lambda: self.hass.async_create_task(self.async_request_refresh()),
+        )
 
     async def _async_update_data(self):
         _LOGGER.debug("_async_update_data")
