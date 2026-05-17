@@ -476,7 +476,11 @@ class AlsavoSocketCom:
         idx_l = (idx & 0xff).to_bytes(1, 'big')
         val_h = ((value >> 8) & 0xff).to_bytes(1, 'big')
         val_l = (value & 0xff).to_bytes(1, 'big')
-        await self.send_packet(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04' + idx_h + idx_l + val_h + val_l)
+        # Use send_and_rcv_packet (not send_packet) to consume the pump's
+        # write-ACK. The pump queues the ACK and delivers it to the next socket
+        # that contacts the session; if left unconsumed, query_all captures it
+        # instead of the data response and triggers a spurious re-auth cycle.
+        await self.send_and_rcv_packet(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04' + idx_h + idx_l + val_h + val_l)
 
     async def connect(self, server_ip, server_port, serial, password):
         if self.is_connected:
