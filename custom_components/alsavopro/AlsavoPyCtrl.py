@@ -43,10 +43,9 @@ class AlsavoPro:
 
     async def _with_session_retry(self, op, *args):
         """
-        Run `op(*args)` against the current session. If it fails (likely
-        expired session or transient socket error), invalidate the session,
-        re-auth once, and retry. Mirrors how the official app reuses sessions
-        between requests instead of re-authing every call.
+        Auth, run `op(*args)`, retry once on transient failure.
+        The pump's session TTL is shorter than the poll interval so we
+        re-auth on every call; the retry handles rare mid-auth packet loss.
         """
         try:
             await self._ensure_connected()
@@ -479,8 +478,6 @@ class AlsavoSocketCom:
         await self.send_packet(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04' + idx_h + idx_l + val_h + val_l)
 
     async def connect(self, server_ip, server_port, serial, password):
-        if self.is_connected:
-            return
         _LOGGER.debug("Connecting to Alsavo Pro")
         try:
             await self._do_handshake(server_ip, server_port, serial, password)
