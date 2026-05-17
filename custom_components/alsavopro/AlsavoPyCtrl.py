@@ -191,6 +191,107 @@ class AlsavoPro:
     async def set_power_mode(self, value: int):
         await self.set_config(16, value)
 
+    # --- register-4 bit toggles (timer enables, pump run mode) -----------------
+    # config_sys1 bit layout (from the official Android app's ControlApi):
+    #   bit 0-1: mode (0=cool, 1=heat, 2=auto) — set via set_*_mode
+    #   bit 2  : timer-on enable
+    #   bit 3  : pump run mode (continuous vs cycling)
+    #   bit 5  : power on/off — set via set_power_on/off
+    #   bit 6  : debug mode (intentionally not exposed)
+    #   bit 7  : timer-off enable
+
+    async def _toggle_config4_bit(self, mask: int, enabled: bool):
+        async with self._config4_lock:
+            current = self._data.get_config_value(4)
+            new = (current | mask) if enabled else (current & (~mask & 0xFFFF))
+            await self.set_config(4, new)
+
+    @property
+    def is_timer_on_enabled(self) -> bool:
+        return bool(self._data.get_config_value(4) & 0x04)
+
+    async def set_timer_on_enabled(self, enabled: bool):
+        await self._toggle_config4_bit(0x04, enabled)
+
+    @property
+    def is_timer_off_enabled(self) -> bool:
+        return bool(self._data.get_config_value(4) & 0x80)
+
+    async def set_timer_off_enabled(self, enabled: bool):
+        await self._toggle_config4_bit(0x80, enabled)
+
+    @property
+    def is_pump_run_mode_enabled(self) -> bool:
+        return bool(self._data.get_config_value(4) & 0x08)
+
+    async def set_pump_run_mode_enabled(self, enabled: bool):
+        await self._toggle_config4_bit(0x08, enabled)
+
+    # --- timer on/off time (idx 33/34) ----------------------------------------
+    # Encoded as (hour << 8) | minute. The current_time status register (idx 32)
+    # uses the same encoding.
+
+    @staticmethod
+    def _decode_hhmm(raw: int) -> tuple[int, int]:
+        return (raw >> 8) & 0xff, raw & 0xff
+
+    @property
+    def timer_on_hhmm(self) -> tuple[int, int]:
+        return self._decode_hhmm(self._data.get_config_value(33))
+
+    @property
+    def timer_off_hhmm(self) -> tuple[int, int]:
+        return self._decode_hhmm(self._data.get_config_value(34))
+
+    async def set_timer_on_hhmm(self, hour: int, minute: int):
+        await self.set_config(33, (hour << 8) | (minute & 0xff))
+
+    async def set_timer_off_hhmm(self, hour: int, minute: int):
+        await self.set_config(34, (hour << 8) | (minute & 0xff))
+
+    # --- defrost + water compensation -----------------------------------------
+    # Bounds from the app (HtcHpParamActivity / TbParamItem):
+    #   defrost in temp  (idx  9): -30..0 °C    (raw × 10)
+    #   defrost out temp (idx 10):   2..30 °C   (raw × 10)
+    #   defrost in time  (idx 12):  30..90 min  (raw)
+    #   defrost out time (idx 13):   1..12 min  (raw)
+    #   water comp       (idx 11): -9..9 °C     (raw tenths-of-°C, step 0.1)
+
+    @property
+    def defrost_in_temp(self) -> float:
+        return self._data.get_config_temperature_value(9)
+
+    @property
+    def defrost_out_temp(self) -> float:
+        return self._data.get_config_temperature_value(10)
+
+    @property
+    def water_compensation(self) -> float:
+        return self._data.get_signed_config_value(11) / 10.0
+
+    @property
+    def defrost_in_time(self) -> int:
+        return self._data.get_config_value(12)
+
+    @property
+    def defrost_out_time(self) -> int:
+        return self._data.get_config_value(13)
+
+    async def set_defrost_in_temp(self, value_c: float):
+        await self.set_config(9, int(value_c * 10))
+
+    async def set_defrost_out_temp(self, value_c: float):
+        await self.set_config(10, int(value_c * 10))
+
+    async def set_water_compensation(self, value_c: float):
+        await self.set_config(11, int(value_c * 10))
+
+    async def set_defrost_in_time(self, minutes: int):
+        await self.set_config(12, int(minutes))
+
+    async def set_defrost_out_time(self, minutes: int):
+        await self.set_config(13, int(minutes))
+
     @property
     def name(self):
         return self._name
