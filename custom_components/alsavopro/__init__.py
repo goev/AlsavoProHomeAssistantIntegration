@@ -3,6 +3,7 @@ import asyncio
 import logging
 from datetime import timedelta
 
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -41,7 +42,10 @@ async def async_setup_entry(hass, entry):
     password = entry.data.get(CONF_PASSWORD)
 
     data_handler = AlsavoPro(name, serial_no, ip_address, port_no, password)
-    await data_handler.update()
+    try:
+        await data_handler.update()
+    except Exception as err:
+        raise ConfigEntryNotReady(f"Cannot connect to AlsavoPro pump: {err}") from err
     data_coordinator = AlsavoProDataCoordinator(hass, data_handler)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = data_coordinator
