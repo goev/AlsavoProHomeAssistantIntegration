@@ -86,6 +86,12 @@ class AlsavoPro:
         except Exception:
             self._online = False
             raise
+        # The pump also invalidates the session immediately after a write —
+        # the next query on the same CSID/DSID returns a truncated packet
+        # that fails parsing. Drop the session now so the follow-up read
+        # does a fast fresh handshake instead of paying the failure-retry
+        # penalty (~2 s sleep + re-auth).
+        self._session.disconnect()
 
     @property
     def is_online(self) -> bool:
