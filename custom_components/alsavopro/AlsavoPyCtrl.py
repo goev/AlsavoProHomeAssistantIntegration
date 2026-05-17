@@ -45,8 +45,9 @@ class AlsavoPro:
         """
         Run `op(*args)` against the current session. If it fails (likely
         expired session or transient socket error), invalidate the session,
-        re-auth once, and retry. Mirrors how the official app reuses sessions
-        between requests instead of re-authing every call.
+        re-auth once, and retry. Reads (query_all) reuse the session across
+        polls; writes (set_config) call disconnect() before invoking this
+        helper so they always start from a fresh handshake.
         """
         try:
             await self._ensure_connected()
@@ -441,10 +442,6 @@ class AlsavoSocketCom:
         _LOGGER.debug("Received response")
         return response
 
-    async def send(self, bytes_to_send):
-        _LOGGER.debug("send()")
-        await self.client.send(bytes_to_send)
-
     async def get_auth_challenge(self):
         auth_intro = AuthIntro(self.clientToken, self.serialQ)
         response = await self.send_and_receive(bytes(auth_intro.pack()))
@@ -464,11 +461,6 @@ class AlsavoSocketCom:
             )
         return None
 
-    async def send_packet(self, payload: bytes, cmd=0xf4):
-        _LOGGER.debug("send_packet(payload, %s)", cmd)
-        if self.CSID is not None and self.DSIS is not None:
-            await self.send(PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, len(payload)).pack() + payload)
-
     async def query_all(self):
         """ Query all information from the heat pump """
         _LOGGER.debug("socket.query_all")
@@ -487,10 +479,8 @@ class AlsavoSocketCom:
         idx_l = (idx & 0xff).to_bytes(1, 'big')
         val_h = ((value >> 8) & 0xff).to_bytes(1, 'big')
         val_l = (value & 0xff).to_bytes(1, 'big')
-        # Use send_and_rcv_packet (not send_packet) to consume the pump's
-        # write-ACK. The pump queues the ACK and delivers it to the next socket
-        # that contacts the session; if left unconsumed, query_all captures it
-        # instead of the data response and triggers a spurious re-auth cycle.
+        # Wait for the pump's write-ACK so we know the command landed before
+        # the caller schedules a follow-up poll.
         await self.send_and_rcv_packet(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04' + idx_h + idx_l + val_h + val_l)
 
     async def connect(self, server_ip, server_port, serial, password):

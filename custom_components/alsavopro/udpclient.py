@@ -9,17 +9,6 @@ class UDPClient:
         self.server_host = server_host
         self.server_port = server_port
 
-    class SimpleClientProtocol(asyncio.DatagramProtocol):
-        # Sending only
-        def __init__(self, message):
-            self.message = message
-            self.transport = None
-
-        def connection_made(self, transport):
-            self.transport = transport
-            self.transport.sendto(self.message)
-            self.transport.close()
-
     class EchoClientProtocol(asyncio.DatagramProtocol):
         # Send and receive
         def __init__(self, message, future):
@@ -58,11 +47,3 @@ class UDPClient:
             return None
         finally:
             transport.close()
-
-    async def send(self, bytes_to_send):
-        loop = asyncio.get_running_loop()
-        transport, protocol = await loop.create_datagram_endpoint(
-            lambda: self.SimpleClientProtocol(bytes_to_send),
-            remote_addr=(self.server_host, self.server_port)
-        )
-        transport.close()
