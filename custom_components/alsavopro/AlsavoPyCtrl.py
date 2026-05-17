@@ -332,6 +332,10 @@ class QueryResponse:
         self.__status = None
         self.__config = None
 
+    @property
+    def is_valid(self):
+        return self.__status is not None and self.__config is not None
+
     def get_status_value(self, idx: int):
         if self.__status is None:
             return 0
@@ -460,7 +464,10 @@ class AlsavoSocketCom:
         resp = await self.send_and_rcv_packet(b'\x08\x01\x00\x00\x00\x02\x00\x2e\xff\xff\x00\x00')
         if resp is None:
             raise ConnectionError("query_all: no response")
-        return QueryResponse.unpack(resp[0][16:])
+        result = QueryResponse.unpack(resp[0][16:])
+        if not result.is_valid:
+            raise ConnectionError("query_all: response missing status or config section (unexpected packet?)")
+        return result
 
     async def set_config(self, idx: int, value: int):
         """ Set configuration values on the heat pump """
