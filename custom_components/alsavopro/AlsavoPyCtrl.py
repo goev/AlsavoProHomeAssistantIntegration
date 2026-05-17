@@ -4,7 +4,7 @@ import logging
 import secrets
 import struct
 from datetime import datetime, timezone
-from enum import Enum
+
 from .const import (
     MODE_TO_CONFIG,
     ALARM_REGISTER_48,
@@ -73,7 +73,10 @@ class AlsavoPro:
 
     @property
     def target_temperature(self):
-        return self.get_temperature_from_config(MODE_TO_CONFIG.get(self.operating_mode, 0))
+        config_key = MODE_TO_CONFIG.get(self.operating_mode)
+        if config_key is None:
+            return None
+        return self.get_temperature_from_config(config_key)
 
     async def set_target_temperature(self, value: float):
         config_key = MODE_TO_CONFIG.get(self.operating_mode)
@@ -97,28 +100,8 @@ class AlsavoPro:
         return self.get_temperature_from_status(16)
 
     @property
-    def water_out_temperature(self):
-        return self.get_temperature_from_status(17)
-
-    @property
-    def ambient_temperature(self):
-        return self.get_temperature_from_status(18)
-
-    @property
     def operating_mode(self):
         return self._data.get_config_value(4) & 3
-
-    @property
-    def is_timer_on_enabled(self):
-        return self._data.get_config_value(4) & 4 == 4
-
-    @property
-    def water_pump_running_mode(self):
-        return self._data.get_config_value(4) & 8 == 8
-
-    @property
-    def electronic_valve_style(self):
-        return self._data.get_config_value(4) & 16 == 16
 
     @property
     def is_power_on(self):
@@ -127,18 +110,6 @@ class AlsavoPro:
     @property
     def power_mode(self):
         return self._data.get_config_value(16)
-
-    @property
-    def is_debug_mode(self):
-        return self._data.get_config_value(4) & 64 == 64
-
-    @property
-    def is_timer_off_enabled(self):
-        return self._data.get_config_value(4) & 128 == 128
-
-    @property
-    def manual_defrost(self):
-        return self._data.get_config_value(5) & 1 == 1
 
     @property
     def dev_type(self):
@@ -339,22 +310,18 @@ class QueryResponse:
     def __init__(self, action, parts):
         self.action = action
         self.parts = parts
-        self.__payloads = []
         self.__status = None
         self.__config = None
-        self.__deviceInfo = None
 
     def get_status_value(self, idx: int):
         if self.__status is None:
             return 0
-        else:
-            return self.__status.get_value(idx)
+        return self.__status.get_value(idx)
 
     def get_config_value(self, idx: int):
         if self.__config is None:
             return 0
-        else:
-            return self.__config.get_value(idx)
+        return self.__config.get_value(idx)
 
     def get_signed_status_value(self, idx: int):
         unsigned_int = self.get_status_value(idx)
@@ -392,9 +359,6 @@ class QueryResponse:
                 obj.__status = payload
             elif payload.subType == 2:
                 obj.__config = payload
-            elif payload.subType == 3:
-                obj.__deviceInfo = payload
-            obj.__payloads.append(payload)
             idx += payload.size + 8
 
         return obj
@@ -405,11 +369,6 @@ def md5_hash(text):
     md5 = hashlib.md5()
     md5.update(text.encode())
     return md5.digest()
-
-
-class ConnectionStatus(Enum):
-    Disconnected = 0
-    Connected = 1
 
 
 class AlsavoSocketCom:
@@ -423,7 +382,6 @@ class AlsavoSocketCom:
         self.password = None
         self.serialQ = None
         self.clientToken = None
-        self.lstConfigReqTime = None
         self.client = None
 
     async def send_and_receive(self, bytes_to_send):
@@ -464,9 +422,8 @@ class AlsavoSocketCom:
         """ Query all information from the heat pump """
         _LOGGER.debug("socket.query_all")
         resp = await self.send_and_rcv_packet(b'\x08\x01\x00\x00\x00\x02\x00\x2e\xff\xff\x00\x00')
-        self.lstConfigReqTime = datetime.now()
         if resp is None:
-            raise Exception("query_all: no response")
+            raise ConnectionError("query_all: no response")
         return QueryResponse.unpack(resp[0][16:])
 
     async def set_config(self, idx: int, value: int):
