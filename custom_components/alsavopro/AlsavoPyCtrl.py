@@ -120,6 +120,12 @@ class AlsavoPro:
     def get_config_value(self, idx: int):
         return self._data.get_config_value(idx)
 
+    def get_signed_status_value(self, idx: int):
+        return self._data.get_signed_status_value(idx)
+
+    def get_signed_config_value(self, idx: int):
+        return self._data.get_signed_config_value(idx)
+
     def get_temperature_from_status(self, idx):
         return self._data.get_status_temperature_value(idx)
 
