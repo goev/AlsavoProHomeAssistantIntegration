@@ -1,11 +1,19 @@
 import asyncio
 import hashlib
 import logging
-import random
+import secrets
 import struct
 from datetime import datetime, timezone
 from enum import Enum
-from .const import MODE_TO_CONFIG, ALARM_REGISTER_48, ALARM_REGISTER_49, ALARM_REGISTER_50, MAX_UPDATE_RETRIES, MAX_SET_CONFIG_RETRIES
+from .const import (
+    MODE_TO_CONFIG,
+    ALARM_REGISTER_48,
+    ALARM_REGISTER_49,
+    ALARM_REGISTER_50,
+    DEV_TYPE_STATUS_IDX,
+    DEV_TYPE_FREQALL,
+    DEV_TYPE_FREQCH,
+)
 from .udpclient import UDPClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,43 +31,37 @@ class AlsavoPro:
         self._password = password
         self._data = QueryResponse(0, 0)
         self._session = AlsavoSocketCom()
-        self._set_retries = 0
-        self._update_retries = 0
         self._online = False
+        # Serialize read-modify-write on config register 4 (mode/power/timer bits).
+        self._config4_lock = asyncio.Lock()
 
     async def update(self):
         _LOGGER.debug("update")
-        last_error = None
-        for attempt in range(MAX_UPDATE_RETRIES):
-            try:
-                await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
-                data = await self._session.query_all()
-                if data is not None:
-                    self._data = data
-                    self._online = True
-                    return
-            except Exception as e:
-                last_error = e
-                _LOGGER.debug("Update attempt %d/%d failed: %s", attempt + 1, MAX_UPDATE_RETRIES, e)
-                if attempt + 1 < MAX_UPDATE_RETRIES:
-                    await asyncio.sleep(2)
-        self._online = False
-        raise ConnectionError(f"Unable to update after {MAX_UPDATE_RETRIES} retries: {last_error}")
+        try:
+            await self._session.connect(
+                self._ip_address, int(self._port_no), int(self._serial_no), self._password
+            )
+            data = await self._session.query_all()
+        except Exception:
+            self._online = False
+            raise
+        if data is None:
+            self._online = False
+            raise ConnectionError("Empty response from heat pump")
+        self._data = data
+        self._online = True
 
     async def set_config(self, idx: int, value: int):
-        _LOGGER.debug(f"set_config({idx}, {value})")
-        for attempt in range(MAX_SET_CONFIG_RETRIES):
-            try:
-                await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
-                await self._session.set_config(idx, value)
-                self._online = True
-                return
-            except Exception as e:
-                _LOGGER.warning(f"Set config attempt {attempt + 1} failed: {e}")
-                if attempt + 1 < MAX_SET_CONFIG_RETRIES:
-                    await asyncio.sleep(2)
-        _LOGGER.error(f"Unable to set config: {idx}, {value} after max retries")
-        self._online = False
+        _LOGGER.debug("set_config(%s, %s)", idx, value)
+        try:
+            await self._session.connect(
+                self._ip_address, int(self._port_no), int(self._serial_no), self._password
+            )
+            await self._session.set_config(idx, value)
+            self._online = True
+        except Exception:
+            self._online = False
+            raise
 
     @property
     def is_online(self) -> bool:
@@ -139,6 +141,16 @@ class AlsavoPro:
         return self._data.get_config_value(5) & 1 == 1
 
     @property
+    def dev_type(self):
+        """Device type from status register (see DEV_TYPE_* in const.py)."""
+        return self.get_status_value(DEV_TYPE_STATUS_IDX)
+
+    @property
+    def is_freq_type(self):
+        """True if the device is variable-frequency (different max heat temp)."""
+        return self.dev_type in (DEV_TYPE_FREQALL, DEV_TYPE_FREQCH)
+
+    @property
     def errors(self):
         errors = []
         for reg, alarm_map in [(48, ALARM_REGISTER_48), (49, ALARM_REGISTER_49), (50, ALARM_REGISTER_50)]:
@@ -149,16 +161,24 @@ class AlsavoPro:
         return "\n".join(errors)
 
     async def set_power_off(self):
-        await self.set_config(4, self._data.get_config_value(4) & 0xFFDF)
+        async with self._config4_lock:
+            await self.set_config(4, self._data.get_config_value(4) & 0xFFDF)
+
+    async def set_power_on(self):
+        async with self._config4_lock:
+            await self.set_config(4, self._data.get_config_value(4) | 0x0020)
 
     async def set_cooling_mode(self):
-        await self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 32)
+        async with self._config4_lock:
+            await self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 32)
 
     async def set_heating_mode(self):
-        await self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 33)
+        async with self._config4_lock:
+            await self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 33)
 
     async def set_auto_mode(self):
-        await self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 34)
+        async with self._config4_lock:
+            await self.set_config(4, (self._data.get_config_value(4) & 0xFFDC) + 34)
 
     async def set_power_mode(self, value: int):
         await self.set_config(16, value)
@@ -293,7 +313,7 @@ class Payload:
         self.data = []
 
     def get_value(self, idx):
-        if idx - self.startIdx < 0 or idx - self.startIdx >= self.data.__len__():
+        if idx - self.startIdx < 0 or idx - self.startIdx >= len(self.data):
             return 0
         return self.data[idx - self.startIdx]
 
@@ -428,17 +448,17 @@ class AlsavoSocketCom:
         return await self.send_and_receive(resp.pack())
 
     async def send_and_rcv_packet(self, payload: bytes, cmd=0xf4):
-        _LOGGER.debug(f"send_and_rcv_packet(payload, {cmd})")
+        _LOGGER.debug("send_and_rcv_packet(payload, %s)", cmd)
         if self.CSID is not None and self.DSIS is not None:
             return await self.send_and_receive(
-                PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, payload.__len__()).pack() + payload
+                PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, len(payload)).pack() + payload
             )
         return None
 
     async def send_packet(self, payload: bytes, cmd=0xf4):
-        _LOGGER.debug(f"send_packet(payload, {cmd})")
+        _LOGGER.debug("send_packet(payload, %s)", cmd)
         if self.CSID is not None and self.DSIS is not None:
-            await self.send(PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, payload.__len__()).pack() + payload)
+            await self.send(PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, len(payload)).pack() + payload)
 
     async def query_all(self):
         """ Query all information from the heat pump """
@@ -451,7 +471,7 @@ class AlsavoSocketCom:
 
     async def set_config(self, idx: int, value: int):
         """ Set configuration values on the heat pump """
-        _LOGGER.debug(f"socket.set_config({idx}, {value})")
+        _LOGGER.debug("socket.set_config(%s, %s)", idx, value)
         idx_h = ((idx >> 8) & 0xff).to_bytes(1, 'big')
         idx_l = (idx & 0xff).to_bytes(1, 'big')
         val_h = ((value >> 8) & 0xff).to_bytes(1, 'big')
@@ -461,7 +481,7 @@ class AlsavoSocketCom:
     async def connect(self, server_ip, server_port, serial, password):
         _LOGGER.debug("Connecting to Alsavo Pro")
 
-        self.clientToken = random.randint(0, 65535)
+        self.clientToken = secrets.randbelow(65536)
         self.serialQ = serial
         self.password = password
         self.client = UDPClient(server_ip, server_port)
@@ -476,7 +496,10 @@ class AlsavoSocketCom:
         self.DSIS = auth_challenge.hdr.dsid
         self.serverToken = auth_challenge.serverToken
 
-        _LOGGER.debug(f"Received handshake, CSID={hex(self.CSID)}, DSID={hex(self.DSIS)}, "f"server token {hex(self.serverToken)}")
+        _LOGGER.debug(
+            "Received handshake, CSID=%s, DSID=%s, server token %s",
+            hex(self.CSID), hex(self.DSIS), hex(self.serverToken),
+        )
 
         ctx = hashlib.md5()
         ctx.update(self.clientToken.to_bytes(4, "big"))
@@ -485,7 +508,7 @@ class AlsavoSocketCom:
 
         response = await self.send_auth_response(ctx)
 
-        if response is None or response[0].__len__() == 0:
+        if response is None or len(response[0]) == 0:
             raise ConnectionError("Server not responding to auth response, disconnecting.")
 
         act = int.from_bytes(response[0][16:20], byteorder='little')
