@@ -3,6 +3,7 @@ import logging
 from datetime import timedelta
 
 import async_timeout
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
@@ -43,7 +44,7 @@ async def async_setup_entry(hass, entry):
         hass.data[DOMAIN] = {}
     hass.data[DOMAIN][entry.entry_id] = data_coordinator
 
-    await hass.config_entries.async_forward_entry_setups(entry, ['sensor', 'climate'])
+    await hass.config_entries.async_forward_entry_setups(entry, ['binary_sensor', 'sensor', 'climate', 'number'])
 
     return True
 
@@ -51,10 +52,16 @@ async def async_setup_entry(hass, entry):
 async def async_unload_entry(hass, config_entry):
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_forward_entry_unload(
+        config_entry, "binary_sensor"
+    )
+    unload_ok |= await hass.config_entries.async_forward_entry_unload(
         config_entry, "climate"
     )
     unload_ok |= await hass.config_entries.async_forward_entry_unload(
         config_entry, "sensor"
+    )
+    unload_ok |= await hass.config_entries.async_forward_entry_unload(
+        config_entry, "number"
     )
     return unload_ok
 
@@ -80,3 +87,20 @@ class AlsavoProDataCoordinator(DataUpdateCoordinator):
                 return self.data_handler
         except Exception as ex:
             _LOGGER.debug("_async_update_data timed out")
+
+
+class AlsavoProEntity:
+    """Mixin providing device_info for Alsavo Pro entities."""
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._data_handler.serial_no)},
+            name=self._data_handler.name,
+            manufacturer="Alsavo/Zealux",
+            model="Swim&Fun 1401/1402",
+            serial_number=str(self._data_handler.serial_no),
+            hw_version=str(self._data_handler.get_status_value(65)),
+            sw_version=str(self._data_handler.get_status_value(66)),
+        )

@@ -11,17 +11,39 @@ from homeassistant.const import (
 
 from .const import (
     SERIAL_NO,
-    DOMAIN
+    DOMAIN,
+    CONNECTION_TYPE,
+    CONNECTION_TYPE_CLOUD,
+    CONNECTION_TYPE_LOCAL,
+    CLOUD_IP,
+    CLOUD_PORT,
+    DEFAULT_LOCAL_PORT,
 )
 
 # _LOGGER = logging.getLogger(__name__)
 
-DATA_SCHEMA = vol.Schema(
+CONNECTION_TYPE_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONNECTION_TYPE, default=CONNECTION_TYPE_CLOUD): vol.In(
+            [CONNECTION_TYPE_CLOUD, CONNECTION_TYPE_LOCAL]
+        ),
+    }
+)
+
+CLOUD_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_NAME): str,
+        vol.Required(SERIAL_NO): str,
+        vol.Required(CONF_PASSWORD): str,
+    }
+)
+
+LOCAL_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME): str,
         vol.Required(SERIAL_NO): str,
         vol.Required(CONF_IP_ADDRESS): str,
-        vol.Required(CONF_PORT): str,
+        vol.Required(CONF_PORT, default=DEFAULT_LOCAL_PORT): str,
         vol.Required(CONF_PASSWORD): str,
     }
 )
@@ -37,13 +59,8 @@ async def validate_input(hass: core.HomeAssistant, name, serial_no, ip_address, 
         raise MissingPasswordValue("The 'password' field is required.")
 
     for entry in hass.config_entries.async_entries(DOMAIN):
-        if any([
-            entry.data[SERIAL_NO] == serial_no,
-            entry.data[CONF_NAME] == name,
-            entry.data[CONF_IP_ADDRESS] == ip_address,
-            entry.data[CONF_PORT] == port_no
-        ]):
-            raise AlreadyConfigured("An entry with the given details already exists.")
+        if entry.data[SERIAL_NO] == serial_no:
+            raise AlreadyConfigured("A device with this serial number already exists.")
 
     # Additional validations (if any) go here...
 
@@ -55,7 +72,55 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step."""
+        """Handle the initial step: choose connection type."""
+        if user_input is not None:
+            if user_input[CONNECTION_TYPE] == CONNECTION_TYPE_CLOUD:
+                return await self.async_step_cloud()
+            return await self.async_step_local()
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=CONNECTION_TYPE_SCHEMA,
+        )
+
+    async def async_step_cloud(self, user_input=None):
+        """Handle cloud connection configuration."""
+        errors = {}
+
+        if user_input is not None:
+            try:
+                name = user_input[CONF_NAME]
+                serial_no = user_input[SERIAL_NO]
+                password = user_input[CONF_PASSWORD].replace(" ", "")
+                await validate_input(self.hass, name, serial_no, CLOUD_IP, CLOUD_PORT, password)
+                unique_id = f"{name}-{serial_no}"
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
+
+                return self.async_create_entry(
+                    title=unique_id,
+                    data={CONF_NAME: name,
+                          SERIAL_NO: serial_no,
+                          CONF_IP_ADDRESS: CLOUD_IP,
+                          CONF_PORT: CLOUD_PORT,
+                          CONF_PASSWORD: password},
+                )
+
+            except AlreadyConfigured:
+                return self.async_abort(reason="already_configured")
+            except CannotConnect:
+                errors["base"] = "connection_error"
+            except MissingNameValue:
+                errors["base"] = "missing_name"
+
+        return self.async_show_form(
+            step_id="cloud",
+            data_schema=CLOUD_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_local(self, user_input=None):
+        """Handle local connection configuration."""
         errors = {}
 
         if user_input is not None:
@@ -87,8 +152,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "missing_name"
 
         return self.async_show_form(
-            step_id="user",
-            data_schema=DATA_SCHEMA,
+            step_id="local",
+            data_schema=LOCAL_SCHEMA,
             errors=errors,
         )
 

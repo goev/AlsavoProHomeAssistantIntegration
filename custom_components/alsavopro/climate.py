@@ -14,7 +14,7 @@ from homeassistant.const import (
     CONF_IP_ADDRESS,
     CONF_PORT,
     CONF_NAME,
-    PRECISION_TENTHS,
+    PRECISION_WHOLE,
     UnitOfTemperature,
 )
 
@@ -24,7 +24,7 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from . import AlsavoProDataCoordinator
+from . import AlsavoProDataCoordinator, AlsavoProEntity
 from .const import (
     DOMAIN,
     POWER_MODE_MAP
@@ -37,8 +37,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([AlsavoProClimate(hass.data[DOMAIN][entry.entry_id])])
 
 
-class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
+class AlsavoProClimate(AlsavoProEntity, CoordinatorEntity, ClimateEntity):
     """ Climate platform for Alsavo Pro pool heater """
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator: AlsavoProDataCoordinator):
         """Initialize the heater."""
@@ -60,7 +61,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     @property
     def name(self):
         """Return the name of the device, if any."""
-        return self._name
+        return None
 
     @property
     def available(self) -> bool:
@@ -162,7 +163,7 @@ class AlsavoProClimate(CoordinatorEntity, ClimateEntity):
     @property
     def target_temperature_step(self):
         """Return the supported step of target temperature."""
-        return PRECISION_TENTHS
+        return PRECISION_WHOLE
 
     async def async_set_temperature(self, **kwargs):
         """Set new target temperature."""

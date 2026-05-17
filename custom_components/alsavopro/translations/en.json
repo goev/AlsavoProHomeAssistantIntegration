@@ -8,6 +8,24 @@
         },
         "step": {
             "user": {
+                "title": "Connection type",
+                "description": "Select how to connect to your Alsavo Pro heat pump",
+                "data": {
+                    "connection_type": "Connection type"
+                }
+            },
+            "cloud": {
+                "title": "Cloud connection",
+                "description": "Connect via the Alsavo cloud server",
+                "data": {
+                    "name": "Device name",
+                    "serial_no": "Heatpump serial no",
+                    "password": "Password"
+                }
+            },
+            "local": {
+                "title": "Local connection",
+                "description": "Connect directly to your heat pump on the local network",
                 "data": {
                     "name": "Device name",
                     "serial_no": "Heatpump serial no",

@@ -1,9 +1,11 @@
 from homeassistant.components.sensor import (
     SensorEntity,
-    SensorDeviceClass
+    SensorDeviceClass,
+    SensorStateClass
 )
+from homeassistant.const import EntityCategory
 
-from . import AlsavoProDataCoordinator
+from . import AlsavoProDataCoordinator, AlsavoProEntity
 from .const import (
     DOMAIN
 )
@@ -21,46 +23,46 @@ async def async_setup_entry(hass, entry, async_add_devices):
         [
             AlsavoProSensor(coordinator,
                             SensorDeviceClass.TEMPERATURE,
-                            "Water In",
+                            "Water in temperature",
                             "°C",
                             16,
                             False,
                             "mdi:thermometer"),
             AlsavoProSensor(coordinator,
                             SensorDeviceClass.TEMPERATURE,
-                            "Water Out",
+                            "Water out temperature",
                             "°C",
                             17,
                             False,
                             "mdi:thermometer"),
             AlsavoProSensor(coordinator,
                             SensorDeviceClass.TEMPERATURE,
-                            "Ambient",
+                            "Ambient temperature",
                             "°C",
                             18,
                             False,
                             "mdi:thermometer"),
             AlsavoProSensor(coordinator,
                             SensorDeviceClass.TEMPERATURE,
-                            "Cold pipe",
+                            "Cold pipe temperature",
                             "°C",
                             19,
                             False,
-                            "mdi:thermometer"),
+                            "mdi:heating-coil"),
             AlsavoProSensor(coordinator,
                             SensorDeviceClass.TEMPERATURE,
-                            "heating pipe",
+                            "Heating pipe temperature",
                             "°C",
                             20,
                             False,
-                            "mdi:thermometer"),
+                            "mdi:heating-coil"),
             AlsavoProSensor(coordinator,
                             SensorDeviceClass.TEMPERATURE,
-                            "IPM module",
+                            "IPM temperature",
                             "°C",
                             21,
                             False,
-                            "mdi:thermometer"),
+                            "mdi:chip"),
             AlsavoProSensor(coordinator,
                             SensorDeviceClass.TEMPERATURE,
                             "Exhaust temperature",
@@ -68,6 +70,36 @@ async def async_setup_entry(hass, entry, async_add_devices):
                             23,
                             False,
                             "mdi:thermometer"),
+            AlsavoProSensor(coordinator,
+                            None,
+                            "Exhaust valve opening",
+                            None,
+                            25,
+                            False,
+                            "mdi:valve",
+                            None,
+                            SensorStateClass.MEASUREMENT),
+            AlsavoProSensor(coordinator,
+                            None,
+                            "Fan speed",
+                            "RPM",
+                            22,
+                            False,
+                            "mdi:fan"),
+            AlsavoProSensor(coordinator,
+                            SensorDeviceClass.CURRENT,
+                            "Compressor current",
+                            "A",
+                            26,
+                            False,
+                            "mdi:current-ac"),
+            AlsavoProSensor(coordinator,
+                            SensorDeviceClass.FREQUENCY,
+                            "Compressor running frequency",
+                            "Hz",
+                            27,
+                            False,
+                            "mdi:sine-wave"),
             AlsavoProSensor(coordinator,
                             SensorDeviceClass.TEMPERATURE,
                             "Heating mode target",
@@ -91,137 +123,133 @@ async def async_setup_entry(hass, entry, async_add_devices):
                             "mdi:thermometer"),
             AlsavoProSensor(coordinator,
                             None,
-                            "Fan speed",
-                            "RPM",
-                            22,
-                            False,
-                            "mdi:fan"),
-            AlsavoProSensor(coordinator,
-                            SensorDeviceClass.CURRENT,
-                            "Compressor",
-                            "A",
-                            26,
-                            False,
-                            "mdi:current-ac"),
-            AlsavoProSensor(coordinator,
-                            SensorDeviceClass.FREQUENCY,
-                            "Compressor running frequency",
-                            "Hz",
-                            27,
-                            False,
-                            "mdi:air-conditioner"),
+                            "Power mode",
+                            "",
+                            16,
+                            True,
+                            "mdi:heat-pump"),
             AlsavoProSensor(coordinator,
                             None,
                             "Frequency limit code",
                             "",
                             34,
                             False,
-                            "mdi:bell-alert"),
+                            "mdi:bell-alert",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProSensor(coordinator,
                             None,
                             "Alarm code 1",
                             "",
                             48,
                             False,
-                            "mdi:bell-alert"),
+                            "mdi:bell-alert",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProSensor(coordinator,
                             None,
                             "Alarm code 2",
                             "",
                             49,
                             False,
-                            "mdi:bell-alert"),
+                            "mdi:bell-alert",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProSensor(coordinator,
                             None,
                             "Alarm code 3",
                             "",
                             50,
                             False,
-                            "mdi:bell-alert"),
+                            "mdi:bell-alert",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProSensor(coordinator,
                             None,
                             "Alarm code 4",
                             "",
                             51,
                             False,
-                            "mdi:bell-alert"),
-            AlsavoProSensor(coordinator,
-                            None,
-                            "Alarm code 4",
-                            "",
-                            51,
-                            False,
-                            "mdi:bell-alert"),
+                            "mdi:bell-alert",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProSensor(coordinator,
                             None,
                             "System status code",
                             "",
                             52,
                             False,
-                            "mdi:state-machine"),
+                            "mdi:state-machine",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProSensor(coordinator,
                             None,
                             "System running code",
                             "",
                             53,
                             False,
-                            "mdi:state-machine"),
+                            "mdi:state-machine",
+                            EntityCategory.DIAGNOSTIC),
+            AlsavoProSensor(coordinator,
+                            None,
+                            "Device status code",
+                            "",
+                            54,
+                            False,
+                            "mdi:state-machine",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProSensor(coordinator,
                             None,
                             "Device type",
                             "",
                             64,
                             False,
-                            "mdi:heat-pump"),
+                            "mdi:heat-pump",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProSensor(coordinator,
                             None,
                             "Main board HW revision",
                             "",
                             65,
                             False,
-                            "mdi:heat-pump"),
+                            "mdi:heat-pump",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProSensor(coordinator,
                             None,
                             "Main board SW revision",
                             "",
                             66,
                             False,
-                            "mdi:heat-pump"),
+                            "mdi:heat-pump",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProSensor(coordinator,
                             None,
                             "Manual HW code",
                             "",
                             67,
                             False,
-                            "mdi:heat-pump"),
+                            "mdi:heat-pump",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProSensor(coordinator,
                             None,
                             "Manual SW code",
                             "",
                             68,
                             False,
-                            "mdi:heat-pump"),
-            AlsavoProSensor(coordinator,
-                            None,
-                            "Power mode",
-                            "",
-                            16,
-                            True,
-                            "mdi:heat-pump"),
+                            "mdi:heat-pump",
+                            EntityCategory.DIAGNOSTIC),
             AlsavoProErrorSensor(coordinator,
                                  "Error messages"),
         ]
     )
 
 
-class AlsavoProSensor(CoordinatorEntity, SensorEntity):
+class AlsavoProSensor(AlsavoProEntity, CoordinatorEntity, SensorEntity):
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator: AlsavoProDataCoordinator,
                  device_class: SensorDeviceClass,
                  name: str,
                  unit: str,
                  idx: int,
                  from_config: bool,
-                 icon: str):
+                 icon: str,
+                 entity_category: EntityCategory = None,
+                 state_class: SensorStateClass = None):
         super().__init__(coordinator)
         self.data_coordinator = coordinator
         self._data_handler = self.data_coordinator.data_handler
@@ -231,11 +259,13 @@ class AlsavoProSensor(CoordinatorEntity, SensorEntity):
         self._dataIdx = idx
         self._config = from_config
         self._icon = icon
+        self._attr_entity_category = entity_category
+        self._attr_state_class = state_class
 
     @property
     def name(self):
         """Return the name of the sensor."""
-        return f"{DOMAIN}_{self._data_handler.name}_{self._name}"
+        return self._name
 
     # This property is important to let HA know if this entity is online or not.
     # If an entity is offline (return False), the UI will reflect this.
@@ -268,7 +298,9 @@ class AlsavoProSensor(CoordinatorEntity, SensorEntity):
         return self._icon
 
 
-class AlsavoProErrorSensor(CoordinatorEntity, SensorEntity):
+class AlsavoProErrorSensor(AlsavoProEntity, CoordinatorEntity, SensorEntity):
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator: AlsavoProDataCoordinator,
                  name: str):
         super().__init__(coordinator)
@@ -276,11 +308,12 @@ class AlsavoProErrorSensor(CoordinatorEntity, SensorEntity):
         self._data_handler = self.data_coordinator.data_handler
         self._name = name
         self._icon = "mdi:alert"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
     def name(self):
         """Return the name of the sensor."""
-        return f"{DOMAIN}_{self._data_handler.name}_{self._name}"
+        return self._name
 
     @property
     def unique_id(self):
