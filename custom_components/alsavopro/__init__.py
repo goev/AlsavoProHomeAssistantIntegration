@@ -59,7 +59,9 @@ async def async_unload_entry(hass, entry):
     """Unload a config entry."""
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
+        coordinator = hass.data[DOMAIN].pop(entry.entry_id, None)
+        if coordinator is not None:
+            coordinator.shutdown()
     return unloaded
 
 
@@ -87,6 +89,12 @@ class AlsavoProDataCoordinator(DataUpdateCoordinator):
             self.hass.async_create_task(self.async_request_refresh())
 
         self._followup_cancel = self.hass.loop.call_later(5, _fire)
+
+    def shutdown(self):
+        """Cancel any pending follow-up timer; called on config-entry unload."""
+        if self._followup_cancel is not None:
+            self._followup_cancel.cancel()
+            self._followup_cancel = None
 
     async def _async_update_data(self):
         _LOGGER.debug("_async_update_data")
