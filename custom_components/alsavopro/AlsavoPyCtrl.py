@@ -29,6 +29,7 @@ class AlsavoPro:
 
     async def update(self):
         _LOGGER.debug("update")
+        last_error = None
         for attempt in range(MAX_UPDATE_RETRIES):
             try:
                 await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
@@ -38,11 +39,12 @@ class AlsavoPro:
                     self._online = True
                     return
             except Exception as e:
-                _LOGGER.warning(f"Update attempt {attempt + 1} failed: {e}")
+                last_error = e
+                _LOGGER.debug("Update attempt %d/%d failed: %s", attempt + 1, MAX_UPDATE_RETRIES, e)
                 if attempt + 1 < MAX_UPDATE_RETRIES:
                     await asyncio.sleep(2)
-        _LOGGER.error("Unable to update after max retries")
         self._online = False
+        raise ConnectionError(f"Unable to update after {MAX_UPDATE_RETRIES} retries: {last_error}")
 
     async def set_config(self, idx: int, value: int):
         _LOGGER.debug(f"set_config({idx}, {value})")
@@ -360,13 +362,17 @@ class QueryResponse:
         obj = QueryResponse(unpacked_data[0], unpacked_data[1])
         idx = 4
 
-        while idx < data.__len__():
-            payload = Payload.unpack(data[idx:])
+        while idx < len(data):
+            try:
+                payload = Payload.unpack(data[idx:])
+            except (ValueError, struct.error) as e:
+                _LOGGER.debug("Stopping payload parse early: %s", e)
+                break
             if payload.subType == 1:
                 obj.__status = payload
             elif payload.subType == 2:
                 obj.__config = payload
-            if payload.subType == 3:
+            elif payload.subType == 3:
                 obj.__deviceInfo = payload
             obj.__payloads.append(payload)
             idx += payload.size + 8
