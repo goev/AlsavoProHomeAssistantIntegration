@@ -56,6 +56,7 @@ class AlsavoPro:
                 "Session call failed (%s), re-authing and retrying once", first_err
             )
             self._session.disconnect()
+            await asyncio.sleep(2)
             await self._ensure_connected()
             return await op(*args)
 
