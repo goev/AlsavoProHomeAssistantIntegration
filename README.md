@@ -102,7 +102,52 @@ The integration exposes a climate entity with the following HVAC modes:
 | Auto | Automatic mode (heat or cool as needed) |
 | Off  | Power off |
 
-Preset modes control fan/compressor power: **Silent**, **Smart**, **Powerful**.
+The set of available modes is filtered per device type — single-mode units only show Heat, FixCh/FreqCh units show Heat + Cool, FreqAll/FixAll show all three plus Auto.
+
+Preset modes control fan/compressor power: **Silent**, **Smart**, **Powerful**. Preset selection is only exposed for variable-frequency devices.
+
+## Controls (writeable settings)
+
+Beyond the climate entity, the integration also exposes installer-level settings that the official Android app lets you tune. After a setting is changed, the pump's new state is reflected in HA after ~5 seconds.
+
+### Numbers
+
+| Entity | Register | Range | Step |
+|---|---|---|---|
+| Defrost in temperature | 9 | -30 … 0 °C | 1 |
+| Defrost out temperature | 10 | 2 … 30 °C | 1 |
+| Defrost in time | 12 | 30 … 90 min | 1 |
+| Defrost out time | 13 | 1 … 12 min | 1 |
+| Water temperature compensation | 11 | -9.0 … 9.0 °C | 0.1 |
+
+### Switches
+
+| Entity | Register | Notes |
+|---|---|---|
+| Timer on enabled | config_sys1 bit 2 | Enables the scheduled daily power-on at *Timer on time* |
+| Timer off enabled | config_sys1 bit 7 | Enables the scheduled daily power-off at *Timer off time* |
+| Pump continuous run | config_sys1 bit 3 | Water circulation pump runs continuously (vs. cycling with the compressor) |
+
+### Times
+
+| Entity | Register | Encoding |
+|---|---|---|
+| Timer on time | 33 | HH:MM picker (stored as `hour << 8 \| minute`) |
+| Timer off time | 34 | same |
+
+### Tuning for winter operation
+
+If you keep the heat pump running through winter, the factory defrost defaults often aren't aggressive enough — ice can build up faster than the cycle clears it. Reasonable starting points for Northwest-European climate (-5 … +5 °C ambient):
+
+| Setting | Default | Winter |
+|---|---|---|
+| Defrost in temp | -7 °C | **-5 °C** (trigger sooner) |
+| Defrost in time | 40 min | **30 min** (react faster) |
+| Defrost out temp | 20 °C | **13 °C** (don't overheat the coil) |
+| Defrost out time | 12 min | **8 min** |
+| Pump continuous run | off | **on** (water keeps circulating through the heat exchanger between cycles) |
+
+Below ~-7 °C ambient the air-source COP collapses; no defrost setting can compensate, and the practical answer is to winterize the pool and drain the heat exchanger.
 
 ## Sensors
 
@@ -151,8 +196,8 @@ Preset modes control fan/compressor power: **Silent**, **Smart**, **Powerful**.
 | Manual fan speed setting | Manual fan speed (debug mode) |
 | Defrost in time | Minimum time between defrost cycles (minutes) |
 | Defrost out time | Maximum defrost duration (minutes) |
-| Hot over | High temperature threshold |
-| Cold over | Low temperature threshold |
+| Hot over | High-temperature hysteresis offset (signed) |
+| Cold over | Low-temperature hysteresis offset (signed, can be negative) |
 | Current time | Device clock (hi byte=hours, lo byte=minutes) |
 | Timer on time | Scheduled power-on time |
 | Timer off time | Scheduled power-off time |
