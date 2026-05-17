@@ -305,14 +305,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
                             "",
                             14,
                             True,
-                            "mdi:thermometer-high"),
+                            "mdi:thermometer-high",
+                            signed=True),
             AlsavoProSensor(coordinator,
                             None,
                             "Cold over",
                             "",
                             15,
                             True,
-                            "mdi:thermometer-low"),
+                            "mdi:thermometer-low",
+                            signed=True),
             AlsavoProSensor(coordinator,
                             None,
                             "Unknown config 17",
@@ -354,7 +356,8 @@ class AlsavoProSensor(CoordinatorEntity, SensorEntity):
                  unit: str,
                  idx: int,
                  from_config: bool,
-                 icon: str):
+                 icon: str,
+                 signed: bool = False):
         super().__init__(coordinator)
         self.data_coordinator = coordinator
         self._data_handler = self.data_coordinator.data_handler
@@ -364,6 +367,7 @@ class AlsavoProSensor(CoordinatorEntity, SensorEntity):
         self._dataIdx = idx
         self._config = from_config
         self._icon = icon
+        self._signed = signed
 
     @property
     def name(self):
@@ -384,17 +388,17 @@ class AlsavoProSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        # Hent data fra data_handler her
         if self._attr_device_class == SensorDeviceClass.TEMPERATURE:
             if self._config:
                 return self._data_handler.get_temperature_from_config(self._dataIdx)
-            else:
-                return self._data_handler.get_temperature_from_status(self._dataIdx)
-        else:
+            return self._data_handler.get_temperature_from_status(self._dataIdx)
+        if self._signed:
             if self._config:
-                return self._data_handler.get_config_value(self._dataIdx)
-            else:
-                return self._data_handler.get_status_value(self._dataIdx)
+                return self._data_handler.get_signed_config_value(self._dataIdx)
+            return self._data_handler.get_signed_status_value(self._dataIdx)
+        if self._config:
+            return self._data_handler.get_config_value(self._dataIdx)
+        return self._data_handler.get_status_value(self._dataIdx)
 
     @property
     def icon(self):
