@@ -14,15 +14,30 @@ Restart Home Assistant and go to *Devices and Services* and press *+Add integrat
 Search for *AlsavoPro* and add it.
 
 ## Configuration
-You must now choose a name for the device. The serial number for the heat pump can be found in the Alsavo Pro app by logging in to the heat pump and pressing the Alsavo Pro-logo in the upper right corner.
+You must choose a name for the device. The serial number for the heat pump can be found in the Alsavo Pro app by logging in to the heat pump and pressing the Alsavo Pro-logo in the upper right corner.
 Password is the same as the one you logged into the Alsavo Pro app with.
 
-Ip-address and port can be one of two:
-- If you want to use the cloud, set IP-address to 47.254.157.150 and port to 51192.
-- If you want to bypass the cloud, enter the heat pumps ip-address and use port 1194.
+For IP-address, enter the heat pump's local IP address on your network, and use port `1194`. The integration talks directly to the pump over UDP — no cloud connection is involved.
+
+> **Note:** Earlier versions of this README documented a cloud-relay option using a public IP (`47.254.157.150:51192`). That cloud endpoint is no longer reachable (the GalaxyWind / Alsavo regional cloud servers appear to be retired for some regions), and the integration has always worked fine against the pump's LAN IP. The cloud option is no longer recommended or supported.
 
 ## Parameter setting
-To access Alsavo Pro heat pump parameters, click "Parameter" in the app and enter password 0757. Key settings include water pump operating modes (P03), input calibration, temperature units, and system diagnostics. These settings allow control over water pump behavior (constant/compressor-dependent) and troubleshooting
+To access Alsavo Pro heat pump parameters, click "Parameter" in the app and enter password 0757. Key settings include water pump operating modes (P03), input calibration, temperature units, and system diagnostics. These settings allow control over water pump behavior (constant/compressor-dependent) and troubleshooting.
+
+## Troubleshooting
+
+### "Offline" in the app but works in HA
+The official Alsavo Pro app routes everything through the GalaxyWind cloud (`*.ice.galaxywind.com`). This integration uses direct UDP on your LAN and doesn't need the cloud, so "offline in app, online in HA" is normal — and means local control is healthy.
+
+### Intermittent HA timeouts or slow updates
+If the pump can't reach its cloud server, its WiFi module enters a retry loop that can starve local UDP responses. The European/Australian/Brazilian dispatcher (`47.88.188.100`) currently doesn't respond, and that same IP is hardcoded as a fallback inside the pump firmware — so even DNS-blocking the hostname isn't enough on its own.
+
+If you see slow or intermittent local responses, add a firewall rule on the IoT network that **REJECTs** (not drops) outbound traffic from the pump to:
+
+- `47.88.188.100` (hardcoded EU/AU/BR fallback)
+- `*.ice.galaxywind.com` if your firewall supports DNS-based rules
+
+Use REJECT, not DROP — REJECT replies with "unreachable" immediately so the pump gives up fast, while DROP makes it hang on slow timeouts (same problem you're trying to solve). After applying the rule, power-cycle the pump so it discards its current retry state.
 
 ## Alarm codes
 
