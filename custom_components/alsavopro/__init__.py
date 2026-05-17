@@ -23,9 +23,13 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+PLATFORMS = ["sensor", "climate"]
 
-async def async_setup(hass, config):
-    return True
+# A single update() call performs the full UDP handshake + query. Allow generous
+# headroom so a momentarily-slow device doesn't get cancelled mid-handshake.
+UPDATE_TIMEOUT = 15
+# Consecutive coordinator failures tolerated before entities go unavailable.
+OFFLINE_TOLERANCE = 5
 
 
 async def async_setup_entry(hass, entry):
@@ -40,23 +44,19 @@ async def async_setup_entry(hass, entry):
     await data_handler.update()
     data_coordinator = AlsavoProDataCoordinator(hass, data_handler)
 
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
-    hass.data[DOMAIN][entry.entry_id] = data_coordinator
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = data_coordinator
 
-    await hass.config_entries.async_forward_entry_setups(entry, ['sensor', 'climate'])
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 
 
-async def async_unload_entry(hass, config_entry):
+async def async_unload_entry(hass, entry):
     """Unload a config entry."""
-    return await hass.config_entries.async_forward_entry_unload(
-        config_entry, ["climate", "sensor"]
-    )
-
-
-OFFLINE_TOLERANCE = 5  # consecutive failures before reporting unavailable
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+    return unloaded
 
 
 class AlsavoProDataCoordinator(DataUpdateCoordinator):
@@ -74,10 +74,10 @@ class AlsavoProDataCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         _LOGGER.debug("_async_update_data")
         try:
-            async with asyncio.timeout(10):
+            async with asyncio.timeout(UPDATE_TIMEOUT):
                 await self.data_handler.update()
-                self._consecutive_failures = 0
-                return self.data_handler
+            self._consecutive_failures = 0
+            return self.data_handler
         except Exception as err:
             self._consecutive_failures += 1
             if self._consecutive_failures < OFFLINE_TOLERANCE:
@@ -88,4 +88,6 @@ class AlsavoProDataCoordinator(DataUpdateCoordinator):
                     err,
                 )
                 return self.data_handler
-            raise UpdateFailed(f"Alsavo Pro unreachable after {OFFLINE_TOLERANCE} attempts: {err}") from err
+            raise UpdateFailed(
+                f"Alsavo Pro unreachable after {OFFLINE_TOLERANCE} attempts: {err}"
+            ) from err

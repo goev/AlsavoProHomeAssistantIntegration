@@ -64,3 +64,23 @@ ALARM_REGISTER_50 = {
 # Max retries
 MAX_UPDATE_RETRIES = 10
 MAX_SET_CONFIG_RETRIES = 10
+
+# Device type (status register 64). Values reverse-engineered from the official app:
+#   0 = FREQALL  (variable-frequency, all modes)
+#   1 = SINGLE   (heat-only)
+#   2 = FIXCH    (fixed-speed, cool + heat)
+#   3 = FREQCH   (variable-frequency, cool + heat)
+#   4 = FIXALL   (fixed-speed, all modes)
+DEV_TYPE_STATUS_IDX = 64
+DEV_TYPE_FREQALL = 0
+DEV_TYPE_SINGLE = 1
+DEV_TYPE_FIXCH = 2
+DEV_TYPE_FREQCH = 3
+DEV_TYPE_FIXALL = 4
+
+# Hardcoded temperature limits used by the official app (°C).
+TEMP_COLD_MIN = 6
+TEMP_COLD_MAX = 35
+TEMP_HOT_MIN = 15
+TEMP_HOT_FREQ_MAX = 41  # variable-frequency devices
+TEMP_HOT_FIX_MAX = 42   # fixed-speed devices

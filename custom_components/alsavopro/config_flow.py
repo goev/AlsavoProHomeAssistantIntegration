@@ -1,17 +1,17 @@
 """Adds config flow for AlsavoPro pool heater integration."""
 import voluptuous as vol
-from homeassistant import config_entries, core, exceptions
+from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.const import (
     CONF_PASSWORD,
     CONF_NAME,
     CONF_IP_ADDRESS,
-    CONF_PORT
+    CONF_PORT,
 )
 
 from .const import (
     SERIAL_NO,
-    DOMAIN
+    DOMAIN,
 )
 
 DATA_SCHEMA = vol.Schema(
@@ -25,24 +25,6 @@ DATA_SCHEMA = vol.Schema(
 )
 
 
-async def validate_input(hass: core.HomeAssistant, name, serial_no, ip_address, port_no, password):
-    """Validate the user input allows us to connect."""
-
-    if not name:
-        raise MissingNameValue("The 'name' field is required.")
-    if not password:
-        raise MissingPasswordValue("The 'password' field is required.")
-
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if any([
-            entry.data[SERIAL_NO] == serial_no,
-            entry.data[CONF_NAME] == name,
-            entry.data[CONF_IP_ADDRESS] == ip_address,
-            entry.data[CONF_PORT] == port_no
-        ]):
-            raise AlreadyConfigured("An entry with the given details already exists.")
-
-
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Handle a config flow for Alsavo Pro pool heater integration."""
 
@@ -53,34 +35,26 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         errors = {}
 
         if user_input is not None:
-            try:
-                name = user_input[CONF_NAME]
-                serial_no = user_input[SERIAL_NO]
-                ip_address = user_input[CONF_IP_ADDRESS]
-                port_no = user_input[CONF_PORT]
-                password = user_input[CONF_PASSWORD].replace(" ", "")
-                await validate_input(self.hass, name, serial_no, ip_address, port_no, password)
-                unique_id = f"{name}-{serial_no}"
-                await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
+            name = user_input[CONF_NAME]
+            serial_no = user_input[SERIAL_NO]
+            ip_address = user_input[CONF_IP_ADDRESS]
+            port_no = user_input[CONF_PORT]
+            password = user_input[CONF_PASSWORD].replace(" ", "")
 
-                return self.async_create_entry(
-                    title=unique_id,
-                    data={CONF_NAME: name,
-                          SERIAL_NO: serial_no,
-                          CONF_IP_ADDRESS: ip_address,
-                          CONF_PORT: port_no,
-                          CONF_PASSWORD: password},
-                )
+            # Serial number is the only stable identifier for the device.
+            await self.async_set_unique_id(serial_no)
+            self._abort_if_unique_id_configured()
 
-            except AlreadyConfigured:
-                return self.async_abort(reason="already_configured")
-            except CannotConnect:
-                errors["base"] = "connection_error"
-            except MissingNameValue:
-                errors["base"] = "missing_name"
-            except MissingPasswordValue:
-                errors["base"] = "missing_password"
+            return self.async_create_entry(
+                title=f"{name} ({serial_no})",
+                data={
+                    CONF_NAME: name,
+                    SERIAL_NO: serial_no,
+                    CONF_IP_ADDRESS: ip_address,
+                    CONF_PORT: port_no,
+                    CONF_PASSWORD: password,
+                },
+            )
 
         return self.async_show_form(
             step_id="user",
@@ -91,30 +65,24 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return OptionsFlowHandler()
+        return OptionsFlowHandler(config_entry)
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
+    def __init__(self, config_entry):
+        self._entry = config_entry
+
     async def async_step_init(self, user_input=None):
+        if user_input is not None:
+            new_password = user_input.get(CONF_PASSWORD, "").replace(" ", "")
+            if new_password:
+                new_data = {**self._entry.data, CONF_PASSWORD: new_password}
+                self.hass.config_entries.async_update_entry(self._entry, data=new_data)
+            return self.async_create_entry(title="", data={})
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
                 vol.Optional(CONF_PASSWORD): str,
             }),
         )
-
-
-class CannotConnect(exceptions.HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-
-class AlreadyConfigured(exceptions.HomeAssistantError):
-    """Error to indicate host is already configured."""
-
-
-class MissingNameValue(exceptions.HomeAssistantError):
-    """Error to indicate name is missing."""
-
-
-class MissingPasswordValue(exceptions.HomeAssistantError):
-    """Error to indicate password is missing."""
