@@ -75,6 +75,11 @@ class AlsavoPro:
 
     async def set_config(self, idx: int, value: int):
         _LOGGER.debug("set_config(%s, %s)", idx, value)
+        # The pump only commits config writes when made on a freshly
+        # authenticated session: reusing a CSID/DSID from a prior poll gets
+        # an ACK back but no state change. Force a fresh handshake before
+        # every write to match the behaviour of the official Android app.
+        self._session.disconnect()
         try:
             await self._with_session_retry(self._session.set_config, idx, value)
             self._online = True
