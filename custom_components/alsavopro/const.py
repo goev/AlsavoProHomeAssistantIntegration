@@ -61,10 +61,6 @@ ALARM_REGISTER_50 = {
     0x0400: "PP11: Water temperature (T2) too low protection (cooling mode)",
 }
 
-# Max retries
-MAX_UPDATE_RETRIES = 10
-MAX_SET_CONFIG_RETRIES = 10
-
 # Device type (status register 64). Values reverse-engineered from the official app:
 #   0 = FREQALL  (variable-frequency, all modes)
 #   1 = SINGLE   (heat-only)

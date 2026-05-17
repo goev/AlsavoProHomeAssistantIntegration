@@ -431,7 +431,3 @@ class AlsavoProErrorSensor(CoordinatorEntity, SensorEntity):
     @property
     def icon(self):
         return self._icon
-
-    async def async_update(self):
-        """Get the latest data."""
-        self._data_handler = self.data_coordinator.data_handler
