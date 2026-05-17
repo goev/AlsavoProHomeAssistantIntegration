@@ -24,7 +24,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["sensor", "climate"]
+PLATFORMS = ["sensor", "climate", "number", "switch", "time"]
 
 # A single update() call performs the full UDP handshake + query. Allow generous
 # headroom so a momentarily-slow device doesn't get cancelled mid-handshake.
