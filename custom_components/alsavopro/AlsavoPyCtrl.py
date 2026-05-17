@@ -35,13 +35,34 @@ class AlsavoPro:
         # Serialize read-modify-write on config register 4 (mode/power/timer bits).
         self._config4_lock = asyncio.Lock()
 
+    async def _ensure_connected(self):
+        """Auth and establish a session if we don't have one. Idempotent."""
+        await self._session.connect(
+            self._ip_address, int(self._port_no), int(self._serial_no), self._password
+        )
+
+    async def _with_session_retry(self, op, *args):
+        """
+        Run `op(*args)` against the current session. If it fails (likely
+        expired session or transient socket error), invalidate the session,
+        re-auth once, and retry. Mirrors how the official app reuses sessions
+        between requests instead of re-authing every call.
+        """
+        try:
+            await self._ensure_connected()
+            return await op(*args)
+        except Exception as first_err:
+            _LOGGER.debug(
+                "Session call failed (%s), re-authing and retrying once", first_err
+            )
+            self._session.disconnect()
+            await self._ensure_connected()
+            return await op(*args)
+
     async def update(self):
         _LOGGER.debug("update")
         try:
-            await self._session.connect(
-                self._ip_address, int(self._port_no), int(self._serial_no), self._password
-            )
-            data = await self._session.query_all()
+            data = await self._with_session_retry(self._session.query_all)
         except Exception:
             self._online = False
             raise
@@ -54,10 +75,7 @@ class AlsavoPro:
     async def set_config(self, idx: int, value: int):
         _LOGGER.debug("set_config(%s, %s)", idx, value)
         try:
-            await self._session.connect(
-                self._ip_address, int(self._port_no), int(self._serial_no), self._password
-            )
-            await self._session.set_config(idx, value)
+            await self._with_session_retry(self._session.set_config, idx, value)
             self._online = True
         except Exception:
             self._online = False
@@ -372,8 +390,13 @@ def md5_hash(text):
 
 
 class AlsavoSocketCom:
-    """ Socket communication handler for the Alsavo Pro integration """
-    """ Everything is pull-based. """
+    """ Socket communication handler for the Alsavo Pro integration.
+
+    Holds a long-lived auth session (CSID/DSID) across calls. The pump
+    accepts re-used CSID/DSID until it times the session out, at which
+    point any subsequent packet is dropped with a session-id mismatch
+    and the caller is expected to re-auth. We re-auth lazily on the next
+    failure rather than running a keep-alive timer."""
 
     def __init__(self):
         self.serverToken = None
@@ -381,6 +404,18 @@ class AlsavoSocketCom:
         self.CSID = None
         self.password = None
         self.serialQ = None
+        self.clientToken = None
+        self.client = None
+
+    @property
+    def is_connected(self) -> bool:
+        return self.CSID is not None and self.DSIS is not None and self.client is not None
+
+    def disconnect(self):
+        """Drop session state so the next operation re-auths from scratch."""
+        self.CSID = None
+        self.DSIS = None
+        self.serverToken = None
         self.clientToken = None
         self.client = None
 
@@ -436,8 +471,18 @@ class AlsavoSocketCom:
         await self.send_packet(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04' + idx_h + idx_l + val_h + val_l)
 
     async def connect(self, server_ip, server_port, serial, password):
+        if self.is_connected:
+            return
         _LOGGER.debug("Connecting to Alsavo Pro")
+        try:
+            await self._do_handshake(server_ip, server_port, serial, password)
+        except Exception:
+            # Avoid leaving partial CSID/DSID/client state that would make
+            # is_connected wrongly return True on the next call.
+            self.disconnect()
+            raise
 
+    async def _do_handshake(self, server_ip, server_port, serial, password):
         self.clientToken = secrets.randbelow(65536)
         self.serialQ = serial
         self.password = password
