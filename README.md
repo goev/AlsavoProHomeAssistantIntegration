@@ -169,28 +169,6 @@ Preset modes control fan/compressor power: **Silent**, **Smart**, **Powerful**.
 | Alarm code 1–4 | Raw alarm register values (registers 48–51) |
 | Error messages | Decoded human-readable alarm messages |
 
-## Changelog
-
-### 1.0.4
-- Added Auto HVAC mode (maps to pump's internal auto mode)
-- Added 18 new sensors: compressor input temp, EEV opening, compressor speed, device status code, heating max/cooling min temps, manual settings, defrost config, timer config, and more
-- Fixed `ClimateEntityFeature.TURN_ON`/`TURN_OFF` missing from supported features (required in HA 2024.2+)
-- Fixed `hvac_mode` returning `None` for unknown operating modes, now falls back to `HVACMode.OFF`
-- Fixed `AlsavoProErrorSensor` missing `available` property, entity now correctly reflects online/offline state
-- Removed unused imports in `climate.py` and `sensor.py`
-
-### 1.0.3
-- Full alarm code decoding for all EE (EE01–EE28) and PP (PP01–PP11) fault codes across registers 48–50
-
-### 1.0.2
-- Fixed `set_config` recursive retry replaced with iterative loop to prevent stack overflow and stale `_online` state
-- Fixed `is_online` now correctly reflects live connection state instead of stale data presence
-- Fixed `Payload.get_value` off-by-one bounds check
-
-### 1.0.1
-- Fixed `NoneType object is not subscriptable` crash when pump is temporarily offline during auth challenge
-- Fixed `unpack requires a buffer of X bytes` error when receiving truncated UDP packets
-- Added 2-second delay between update retries so the pump has time to recover when briefly offline
 
 ## AlsavoCtrl
 This code is very much based on AlsavoCtrl: https://github.com/strandborg/AlsavoCtrl
