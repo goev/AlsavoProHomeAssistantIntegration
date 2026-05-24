@@ -11,13 +11,18 @@ from .udpclient import UDPClient
 _LOGGER = logging.getLogger(__name__)
 
 
+def sanitize_serial_no(serial_no):
+    """Return serial number containing digits only."""
+    return "".join(ch for ch in str(serial_no) if ch.isdigit())
+
+
 class AlsavoPro:
     """Alsavo Pro data handler."""
 
     def __init__(self, name, serial_no, ip_address, port_no, password):
         """Init Alsavo Pro data handler."""
         self._name = name
-        self._serial_no = serial_no
+        self._serial_no = sanitize_serial_no(serial_no)
         self._ip_address = ip_address
         self._port_no = port_no
         self._password = password
@@ -447,7 +452,13 @@ class AlsavoSocketCom:
         self.lstConfigReqTime = datetime.now()
         if resp is None:
             raise Exception("query_all: no response")
-        return QueryResponse.unpack(resp[0][16:])
+
+        query_response = QueryResponse.unpack(resp[0][16:])
+        if query_response.action == 7 or query_response.parts == 0:
+            raise PermissionError(
+                "Heat pump rejected status query. Check the local key/password used by the integration."
+            )
+        return query_response
 
     async def set_config(self, idx: int, value: int):
         """ Set configuration values on the heat pump """

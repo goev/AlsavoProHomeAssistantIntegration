@@ -52,10 +52,10 @@ class UDPClient:
         )
 
         try:
-            data = await asyncio.wait_for(future, timeout=5.0)
+            data = await asyncio.wait_for(future, timeout=20.0)
             return data, b'0'
         except asyncio.TimeoutError:
-            _LOGGER.error("Timeout: No response from server in 5 seconds.")
+            _LOGGER.error("Timeout: No response from server in 20 seconds.")
             return None
         finally:
             transport.close()
