@@ -1,10 +1,13 @@
 {
     "config": {
         "abort": {
-            "already_configured": "Account is already configured"
+            "already_configured": "Account is already configured",
+            "reconfigure_successful": "Connection details updated."
         },
         "error": {
-            "connection_error": "Failed to connect"
+            "connection_error": "Failed to connect",
+            "invalid_details": "Enter a name, address, numeric serial number and a port between 1 and 65535.",
+            "already_configured": "Another entry already uses this serial number."
         },
         "step": {
             "user": {
@@ -32,6 +35,17 @@
                     "ip_address": "IP-address",
                     "port": "Port no",
                     "password": "Password"
+                }
+            },
+            "reconfigure": {
+                "title": "Edit heat pump connection",
+                "description": "Update details for this heat pump. Leave password blank to keep it. Use the cloud server address and port for cloud connections, or the pump address and port for local connections.",
+                "data": {
+                    "name": "Device name",
+                    "serial_no": "Heat pump serial number",
+                    "ip_address": "IP address or server",
+                    "port": "Port",
+                    "password": "New password (optional)"
                 }
             }
         }

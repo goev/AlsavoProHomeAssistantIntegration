@@ -5,7 +5,8 @@ from homeassistant.components.climate import (
     PLATFORM_SCHEMA,
     ClimateEntity,
     ClimateEntityFeature,
-    HVACMode
+    HVACMode,
+    HVACAction,
 )
 
 from homeassistant.const import (
@@ -40,6 +41,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class AlsavoProClimate(AlsavoProEntity, CoordinatorEntity, ClimateEntity):
     """ Climate platform for Alsavo Pro pool heater """
     _attr_has_entity_name = True
+    _attr_translation_key = "pool_heat_pump"
 
     def __init__(self, coordinator: AlsavoProDataCoordinator):
         """Initialize the heater."""
@@ -83,20 +85,34 @@ class AlsavoProClimate(AlsavoProEntity, CoordinatorEntity, ClimateEntity):
         return operating_mode_map.get(self._data_handler.operating_mode)
 
     @property
+    def hvac_action(self):
+        """Report activity from pump data, independently of sensor entities."""
+        if not self.available:
+            return None
+        if not self._data_handler.is_power_on:
+            return HVACAction.OFF
+        code = self._data_handler.get_status_value(53)
+        # 2 is documented by AlsavoCtrl; 1, 3 and 4 were observed on this pump.
+        if code == 2:
+            return HVACAction.DEFROSTING
+        if code == 1:
+            return HVACAction.IDLE
+        if code in (3, 4):
+            if self._data_handler.get_status_value(27) == 0:
+                return HVACAction.IDLE
+            return HVACAction.HEATING if code == 3 else HVACAction.COOLING
+        # In particular, code 5 has not been verified. Do not guess in Auto.
+        return None
+
+    @property
     def preset_mode(self):
         """Return Preset modes silent, smart mode."""
         return POWER_MODE_MAP.get(self._data_handler.power_mode)
 
     @property
     def icon(self):
-        """Return nice icon for heater."""
-        hvac_mode_icons = {
-            HVACMode.HEAT: "mdi:fire",
-            HVACMode.COOL: "mdi:snowflake",
-            HVACMode.AUTO: "mdi:refresh-auto"
-        }
-
-        return hvac_mode_icons.get(self.hvac_mode, "mdi:hvac-off")
+        """Return the pool thermometer icon."""
+        return "mdi:pool-thermometer"
 
     @property
     def hvac_modes(self):

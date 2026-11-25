@@ -1,7 +1,6 @@
 """Adds config flow for AlsavoPro pool heater integration."""
 import voluptuous as vol
 from homeassistant import config_entries, core, exceptions
-from homeassistant.core import callback
 from homeassistant.const import (
     CONF_PASSWORD,
     CONF_NAME,
@@ -70,6 +69,61 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
+
+    async def async_step_reconfigure(self, user_input=None):
+        """Edit connection details while retaining existing entity identities."""
+        entry = self._get_reconfigure_entry()
+        errors = {}
+        if user_input is not None:
+            data = {**entry.data, **user_input}
+            data[CONF_NAME] = data[CONF_NAME].strip()
+            data[SERIAL_NO] = data[SERIAL_NO].strip()
+            data[CONF_IP_ADDRESS] = data[CONF_IP_ADDRESS].strip()
+            # An empty password field retains the stored password.
+            data[CONF_PASSWORD] = (
+                user_input.get(CONF_PASSWORD, "").replace(" ", "")
+                or entry.data[CONF_PASSWORD]
+            )
+            try:
+                if not data[CONF_NAME] or not data[CONF_IP_ADDRESS]:
+                    raise ValueError
+                if not data[SERIAL_NO].isdigit() or not 0 < int(data[SERIAL_NO]) < 2**64:
+                    raise ValueError
+                if not 1 <= int(data[CONF_PORT]) <= 65535:
+                    raise ValueError
+                data[CONF_PORT] = str(data[CONF_PORT])
+            except (ValueError, TypeError):
+                errors["base"] = "invalid_details"
+            else:
+                if any(
+                    other.entry_id != entry.entry_id
+                    and other.data.get(SERIAL_NO) == data[SERIAL_NO]
+                    for other in self.hass.config_entries.async_entries(DOMAIN)
+                ):
+                    errors["base"] = "already_configured"
+                else:
+                    data.setdefault(
+                        "entity_identity",
+                        f"{entry.data[CONF_NAME]}_{entry.data[SERIAL_NO]}",
+                    )
+                    data.setdefault("device_identity", entry.data[SERIAL_NO])
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        data_updates=data,
+                        title=f"{data[CONF_NAME]}-{data[SERIAL_NO]}",
+                    )
+        values = user_input if user_input is not None else entry.data
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema({
+                vol.Required(CONF_NAME, default=values.get(CONF_NAME, "")): str,
+                vol.Required(SERIAL_NO, default=values.get(SERIAL_NO, "")): str,
+                vol.Required(CONF_IP_ADDRESS, default=values.get(CONF_IP_ADDRESS, "")): str,
+                vol.Required(CONF_PORT, default=str(values.get(CONF_PORT, DEFAULT_LOCAL_PORT))): str,
+                vol.Optional(CONF_PASSWORD): str,
+            }),
+            errors=errors,
+        )
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step: choose connection type."""
@@ -156,21 +210,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=LOCAL_SCHEMA,
             errors=errors,
         )
-
-
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    async def async_step_init(self, user_input=None):
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema({
-                vol.Optional(CONF_PASSWORD): str,
-            }),
-        )
-
-
-@callback
-def async_get_options_flow(config_entry):
-    return OptionsFlowHandler(config_entry)
 
 
 class CannotConnect(exceptions.HomeAssistantError):

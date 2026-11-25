@@ -67,7 +67,7 @@ class AlsavoPro:
 
     @property
     def unique_id(self):
-        return f"{self._name}_{self._serial_no}"
+        return getattr(self, "entity_identity", f"{self._name}_{self._serial_no}")
 
     @property
     def target_temperature(self):

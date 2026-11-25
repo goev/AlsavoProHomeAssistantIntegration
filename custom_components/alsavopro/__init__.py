@@ -37,6 +37,8 @@ async def async_setup_entry(hass, entry):
     password = entry.data.get(CONF_PASSWORD)
 
     data_handler = AlsavoPro(name, serial_no, ip_address, port_no, password)
+    data_handler.entity_identity = entry.data.get("entity_identity", f"{name}_{serial_no}")
+    data_handler.device_identity = entry.data.get("device_identity", serial_no)
     await data_handler.update()
     data_coordinator = AlsavoProDataCoordinator(hass, data_handler)
 
@@ -51,19 +53,13 @@ async def async_setup_entry(hass, entry):
 
 async def async_unload_entry(hass, config_entry):
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_forward_entry_unload(
-        config_entry, "binary_sensor"
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        config_entry, ["binary_sensor", "climate", "sensor", "number"]
     )
-    unload_ok |= await hass.config_entries.async_forward_entry_unload(
-        config_entry, "climate"
-    )
-    unload_ok |= await hass.config_entries.async_forward_entry_unload(
-        config_entry, "sensor"
-    )
-    unload_ok |= await hass.config_entries.async_forward_entry_unload(
-        config_entry, "number"
-    )
+    if unload_ok:
+        hass.data[DOMAIN].pop(config_entry.entry_id, None)
     return unload_ok
+
 
 
 class AlsavoProDataCoordinator(DataUpdateCoordinator):
@@ -96,7 +92,7 @@ class AlsavoProEntity:
     def device_info(self) -> DeviceInfo:
         """Return device information."""
         return DeviceInfo(
-            identifiers={(DOMAIN, self._data_handler.serial_no)},
+            identifiers={(DOMAIN, self._data_handler.device_identity)},
             name=self._data_handler.name,
             manufacturer="Alsavo/Zealux",
             model="Swim&Fun 1401/1402",

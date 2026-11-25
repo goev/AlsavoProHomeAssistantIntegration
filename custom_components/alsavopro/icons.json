@@ -1,0 +1,18 @@
+{
+  "entity": {
+    "climate": {
+      "pool_heat_pump": {
+        "default": "mdi:pool-thermometer",
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "Silent": "mdi:leaf",
+              "Smart": "mdi:brain",
+              "Powerful": "mdi:arm-flex"
+            }
+          }
+        }
+      }
+    }
+  }
+}
